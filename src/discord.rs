@@ -1,6 +1,8 @@
 use std::env;
+use std::sync::Arc;
 
 use dotenv::dotenv;
+use serenity::prelude::Mutex;
 use songbird::SerenityInit;
 
 use serenity::client::Context;
@@ -58,8 +60,21 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .clone();
 
     let _handler = manager.join(guild_id, connect_to).await;
+    deafen(_handler.0).await;
 
     Ok(())
+}
+
+async fn deafen(handler_lock: Arc<Mutex<songbird::Call>>) {
+    let mut handler = handler_lock.lock().await;
+
+    if handler.is_deaf() {
+        println!("Client already deafened");
+    } else {
+        if let Err(e) = handler.deafen(true).await {
+            eprintln!("Failed: {:?}", e)
+        }
+    }
 }
 
 #[command]
