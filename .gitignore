@@ -12,3 +12,7 @@ target/
 
 ### dotenv ###
 .env
+
+
+### dev ###
+*.json
