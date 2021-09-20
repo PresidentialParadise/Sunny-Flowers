@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,13 +11,19 @@ use serenity::{
     client::{Client, Context, EventHandler},
     framework::{
         standard::{
-            macros::{command, group},
-            Args, CommandResult,
+            help_commands,
+            macros::{command, group, help},
+            Args, CommandGroup, CommandResult, HelpOptions,
         },
         StandardFramework,
     },
     http::Http,
-    model::{channel::Message, gateway::Ready, misc::Mentionable, prelude::ChannelId},
+    model::{
+        channel::Message,
+        gateway::Ready,
+        misc::Mentionable,
+        prelude::{ChannelId, UserId},
+    },
     prelude::Mutex,
     Result as SerenityResult,
 };
@@ -81,8 +88,22 @@ impl VoiceEventHandler for ChannelDurationNotifier {
 #[commands(join, leave, play, ping, skip, stop)]
 struct General;
 
+#[help]
+async fn help(
+    ctx: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(ctx, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
+
 #[command]
 #[only_in(guilds)]
+/// Adds Sunny to the user's current voice channel.
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
@@ -164,6 +185,7 @@ async fn deafen(handler_lock: Arc<Mutex<songbird::Call>>) {
 
 #[command]
 #[only_in(guilds)]
+/// Removes Sunny from the current voice channel and clears the queue.
 async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
@@ -192,7 +214,13 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[aliases(p)]
+#[max_args(1)]
 #[only_in(guilds)]
+#[usage("<url>")]
+#[example("https://www.youtube.com/watch?v=dQw4w9WgXcQ")]
+/// While Sunny is in a voice channel, you may run the play command so that she
+/// can start streaming the given video URL.
 async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let url = match args.single::<String>() {
         Ok(url) => url,
@@ -260,6 +288,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 #[command]
 #[only_in(guilds)]
+/// Skips the currently playing song and moves to the next song in the queue.
 async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
@@ -295,6 +324,7 @@ async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
 #[command]
 #[only_in(guilds)]
+/// Stops playing the current song and clears the current song queue.
 async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
@@ -323,6 +353,7 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
 #[command]
 #[only_in(guilds)]
+/// Pong
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     check_msg(msg.channel_id.say(&ctx.http, "Pong!").await);
 
@@ -341,7 +372,8 @@ pub async fn create_bot() {
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
-        .group(&GENERAL_GROUP);
+        .group(&GENERAL_GROUP)
+        .help(&HELP);
 
     let mut client = Client::builder(&token)
         .event_handler(Handler)
