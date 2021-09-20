@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sunny-flowers
+  namespace: presidential-paradise
+  labels:
+    app: sunny-flowers
+    keel.sh/policy: force
+spec:
+  # Multiple replicas are _not_ supported
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sunny-flowers
+  template:
+    metadata:
+      labels:
+        app: sunny-flowers
+    spec:
+      containers:
+      - name: sunny-flowers
+        image: registry.xirion.net/library/sunny-flowers
+        env:
+          - name: DISCORD_TOKEN
+            value: CHANGE_ME
+
