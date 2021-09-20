@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: sunny-flowers
-        image: registry.xirion.net/library/sunny-flowers
+        image: registry.xirion.net/library/sunny-flowers:dev
         env:
           - name: DISCORD_TOKEN
             value: CHANGE_ME
