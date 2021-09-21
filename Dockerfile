@@ -1,21 +1,25 @@
-# Building the app
-FROM rust:1.55 as build
+FROM lukemathwalker/cargo-chef:latest-rust-1.55.0-alpine as chef
+WORKDIR /app
 
-WORKDIR /sunny-flowers/
+FROM chef AS planner
 COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Install dependencies
-RUN apt-get update && apt-get install -y libopus-dev && rm -rf /var/lib/apt/lists/*
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
 
-RUN cargo build --release --locked
+# install system dependencies
+RUN apk add --no-cache opus-dev autoconf automake
 
-# Running the app
-FROM debian:bullseye-slim
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# Add run deps
-RUN apt-get update && apt-get install -y ffmpeg youtube-dl && rm -rf /var/lib/apt/lists/*
+# Build application
+COPY . .
+RUN cargo build --release --bin sunny_flowers
 
-# Copy bin from builder
-COPY --from=build /sunny-flowers/target/release/sunny_flowers /usr/local/bin/sunny_flowers
-
-CMD ["sunny_flowers"]
+FROM alpine:edge AS runtime
+WORKDIR /app
+RUN apk add --no-cache ffmpeg opus youtube-dl
+COPY --from=builder /app/target/release/sunny_flowers /usr/local/bin
+CMD ["/usr/local/bin/sunny_flowers"]
