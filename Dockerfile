@@ -10,6 +10,7 @@ COPY --from=planner /app/recipe.json recipe.json
 
 # install system dependencies
 RUN apk add --no-cache opus-dev autoconf automake
+ARG RUSTFLAGS='-C target-feature=-crt-static'
 
 # Build dependencies - this is the caching Docker layer!
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -20,6 +21,6 @@ RUN cargo build --release --locked --bin sunny_flowers
 
 FROM alpine:edge AS runtime
 WORKDIR /app
-RUN apk add --no-cache ffmpeg opus youtube-dl
+RUN apk add --no-cache ffmpeg opus-dev youtube-dl
 COPY --from=builder /app/target/release/sunny_flowers /usr/local/bin
 CMD ["/usr/local/bin/sunny_flowers"]
