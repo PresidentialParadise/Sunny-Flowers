@@ -1,13 +1,11 @@
 name: Docker
 
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
+# GHA Workflow for building and publishing the docker container with layer caching
+# It is based on this helpful article: https://evilmartians.com/chronicles/build-images-on-github-actions-with-docker-layer-caching
 
 on:
   push:
-    branches: [ feat/docker-improvement ]
+    branches: [ dev ]
 env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: registry.xirion.net
@@ -62,7 +60,7 @@ jobs:
         uses: docker/build-push-action@v2.7.0
         with:
           context: .
-          push: false #FIXME
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=local,src=/tmp/.buildx-cache

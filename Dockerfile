@@ -16,7 +16,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 # Build application
 COPY . .
-RUN cargo build --release --bin sunny_flowers
+RUN cargo build --release --locked --bin sunny_flowers
 
 FROM alpine:edge AS runtime
 WORKDIR /app
