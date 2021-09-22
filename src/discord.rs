@@ -96,6 +96,8 @@ impl EventHandler for Handler {
                     }
                 });
             }
+
+            self.is_loop_running.swap(true, Ordering::Relaxed);
         }
     }
 }
