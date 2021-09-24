@@ -2,3 +2,4 @@ Dockerfile
 k8s
 .github
 target
+.env
