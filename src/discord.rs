@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     env,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -26,94 +26,22 @@ use serenity::{
         channel::Message,
         gateway::Ready,
         guild::Guild,
-        id::GuildId,
         misc::Mentionable,
         prelude::{ChannelId, UserId},
     },
     prelude::Mutex,
     Result as SerenityResult,
 };
+use songbird::input::restartable::Restartable;
+use songbird::{Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent};
 
-use songbird::{
-    input::restartable::Restartable, ConnectionInfo, Event, EventContext,
-    EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
-};
-
-struct Handler {
-    is_loop_running: AtomicBool,
-}
+struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         println!("{} is connected", ready.user.name);
     }
-
-    #[rustfmt::skip]
-    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        let manager = songbird::get(&ctx).await.unwrap();
-
-        if !self.is_loop_running.load(Ordering::Relaxed) {
-            for guild_id in ctx.cache.guilds().await {
-                let ctx1 = ctx.clone();
-                let manager1 = manager.clone();
-
-                tokio::spawn(async move {
-                    let mut c = 0;
-
-                    loop {
-                        let guild = if let Some(guild) = ctx1.cache.guild(guild_id).await { guild } else { eprintln!("Couldn't find guild"); continue };
-
-                        let handler_lock = if let Some(handler_lock) = manager1.get(guild_id) { handler_lock } else { continue; };
-
-                        let handler = handler_lock.lock().await;
-                        let conn_info = if let Some(conn_info) = handler.current_connection() { conn_info } else { continue; };
-
-                        let sc_id = ChannelId::from(conn_info.channel_id.unwrap().0);
-                        if check_alone(guild, conn_info) {
-                            c += 1;
-                            if c > 5 {
-                                if let Err(e) = manager1.remove(guild_id).await {
-                                    eprintln!("Failed: {:?}", e);
-                                }
-
-                                check_msg(
-                                    sc_id
-                                        .say(&ctx1.http, "Sunny Flowers tuning out!")
-                                        .await,
-                                );
-                            }
-                        } else {
-                            c = 0;
-                            check_msg(
-                                sc_id
-                                    .say(&ctx1.http, "Thanks for joining us on the air!")
-                                    .await,
-                            );
-                        }
-
-                        tokio::time::sleep(Duration::from_secs(60)).await;
-                    }
-                });
-            }
-
-            self.is_loop_running.swap(true, Ordering::Relaxed);
-        }
-    }
-}
-
-fn check_alone(guild: Guild, conn_info: &ConnectionInfo) -> bool {
-    if let Some(channel_id) = conn_info.channel_id {
-        let other_user_in_voice = guild.voice_states.values().any(|vs| match vs.channel_id {
-            Some(c_id) => channel_id.0 == c_id.0 && vs.user_id.0 != conn_info.user_id.0,
-            None => false,
-        });
-        if !other_user_in_voice {
-            return true;
-        }
-    }
-
-    false
 }
 
 struct TrackEndNotifier {
@@ -134,6 +62,54 @@ impl VoiceEventHandler for TrackEndNotifier {
 
         None
     }
+}
+
+struct TimeoutHandler {
+    guild: Guild,
+    channel_id: ChannelId,
+    timer: AtomicUsize,
+    ctx: Context,
+}
+
+#[async_trait]
+impl VoiceEventHandler for TimeoutHandler {
+    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        if check_alone(
+            &self.guild,
+            self.channel_id,
+            self.ctx.cache.current_user_id().await,
+        ) {
+            let prev = self.timer.fetch_add(1, Ordering::Relaxed);
+
+            if prev >= 5 {
+                let manager = songbird::get(&self.ctx)
+                    .await
+                    .expect("Songbird Voice Client placed in at initialisation")
+                    .clone();
+
+                if let Err(e) = manager.remove(self.guild.id).await {
+                    eprintln!("Failed: {:?}", e);
+                }
+
+                check_msg(
+                    self.channel_id
+                        .say(&self.ctx.http, "Left voice due to lack of frens :(((")
+                        .await,
+                );
+            }
+        } else {
+            let _ = self.timer.swap(0, Ordering::Relaxed);
+        }
+
+        None
+    }
+}
+
+fn check_alone(guild: &Guild, channel_id: ChannelId, bot_id: UserId) -> bool {
+    !guild.voice_states.values().any(|vs| match vs.channel_id {
+        Some(c_id) => channel_id.0 == c_id.0 && vs.user_id.0 != bot_id.0,
+        None => false,
+    })
 }
 
 #[group]
@@ -199,10 +175,20 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
                 http: send_http,
             },
         );
+
+        handle.add_global_event(
+            Event::Periodic(Duration::from_secs(60), None),
+            TimeoutHandler {
+                guild,
+                channel_id,
+                timer: Default::default(),
+                ctx: ctx.clone(),
+            },
+        )
     } else {
         check_msg(
             msg.channel_id
-                .say(&ctx.http, format!("Failed to join channel"))
+                .say(&ctx.http, "Failed to join channel")
                 .await,
         );
     }
@@ -217,10 +203,8 @@ async fn deafen(handler_lock: Arc<Mutex<songbird::Call>>) {
 
     if handler.is_deaf() {
         println!("Client already deafened");
-    } else {
-        if let Err(e) = handler.deafen(true).await {
-            eprintln!("Failed: {:?}", e)
-        }
+    } else if let Err(e) = handler.deafen(true).await {
+        eprintln!("Failed: {:?}", e)
     }
 }
 
@@ -416,12 +400,8 @@ pub async fn create_bot() {
         .group(&GENERAL_GROUP)
         .help(&HELP);
 
-    let handler = Handler {
-        is_loop_running: AtomicBool::new(false),
-    };
-
     let mut client = Client::builder(&token)
-        .event_handler(handler)
+        .event_handler(Handler)
         .framework(framework)
         .register_songbird()
         .await
