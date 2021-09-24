@@ -1,123 +1,29 @@
 use std::{
     collections::HashSet,
-    env,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicUsize, Arc},
     time::Duration,
 };
 
-use dotenv::dotenv;
-
 use serenity::{
-    async_trait,
-    client::{Client, Context, EventHandler},
-    framework::{
-        standard::{
-            help_commands,
-            macros::{command, group, help},
-            Args, CommandGroup, CommandResult, HelpOptions,
-        },
-        StandardFramework,
+    client::Context,
+    framework::standard::{
+        help_commands,
+        macros::{command, help},
+        Args, CommandGroup, CommandResult, HelpOptions,
     },
-    http::Http,
-    model::{
-        channel::Message,
-        gateway::Ready,
-        guild::Guild,
-        misc::Mentionable,
-        prelude::{ChannelId, UserId},
-    },
+    model::{channel::Message, misc::Mentionable, prelude::UserId},
     prelude::Mutex,
-    Result as SerenityResult,
 };
 use songbird::input::restartable::Restartable;
-use songbird::{Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent};
+use songbird::{Event, TrackEvent};
 
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected", ready.user.name);
-    }
-}
-
-struct TrackEndNotifier {
-    channel_id: ChannelId,
-    http: Arc<Http>,
-}
-
-#[async_trait]
-impl VoiceEventHandler for TrackEndNotifier {
-    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
-        if let EventContext::Track(track_list) = ctx {
-            check_msg(
-                self.channel_id
-                    .say(&self.http, format!("Tracks ended: {}", track_list.len()))
-                    .await,
-            );
-        }
-
-        None
-    }
-}
-
-struct TimeoutHandler {
-    guild: Guild,
-    channel_id: ChannelId,
-    timer: AtomicUsize,
-    ctx: Context,
-}
-
-#[async_trait]
-impl VoiceEventHandler for TimeoutHandler {
-    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        if check_alone(
-            &self.guild,
-            self.channel_id,
-            self.ctx.cache.current_user_id().await,
-        ) {
-            let prev = self.timer.fetch_add(1, Ordering::Relaxed);
-
-            if prev >= 5 {
-                let manager = songbird::get(&self.ctx)
-                    .await
-                    .expect("Songbird Voice Client placed in at initialisation")
-                    .clone();
-
-                if let Err(e) = manager.remove(self.guild.id).await {
-                    eprintln!("Failed: {:?}", e);
-                }
-
-                check_msg(
-                    self.channel_id
-                        .say(&self.ctx.http, "Left voice due to lack of frens :(((")
-                        .await,
-                );
-            }
-        } else {
-            let _ = self.timer.swap(0, Ordering::Relaxed);
-        }
-
-        None
-    }
-}
-
-fn check_alone(guild: &Guild, channel_id: ChannelId, bot_id: UserId) -> bool {
-    !guild.voice_states.values().any(|vs| match vs.channel_id {
-        Some(c_id) => channel_id.0 == c_id.0 && vs.user_id.0 != bot_id.0,
-        None => false,
-    })
-}
-
-#[group]
-#[commands(join, leave, play, ping, skip, stop)]
-struct General;
+use crate::{
+    handlers::{TimeoutHandler, TrackEndNotifier},
+    utils::check_msg,
+};
 
 #[help]
-async fn help(
+pub async fn help(
     ctx: &Context,
     msg: &Message,
     args: Args,
@@ -125,14 +31,16 @@ async fn help(
     groups: &[&'static CommandGroup],
     owners: HashSet<UserId>,
 ) -> CommandResult {
-    let _ = help_commands::with_embeds(ctx, msg, args, help_options, groups, owners).await;
+    help_commands::with_embeds(ctx, msg, args, help_options, groups, owners)
+        .await
+        .unwrap();
     Ok(())
 }
 
 #[command]
 #[only_in(guilds)]
 /// Adds Sunny to the user's current voice channel.
-async fn join(ctx: &Context, msg: &Message) -> CommandResult {
+pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
@@ -141,13 +49,11 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .get(&msg.author.id)
         .and_then(|voice_state| voice_state.channel_id);
 
-    let connect_to = match channel_id {
-        Some(channel) => channel,
-        None => {
-            check_msg(msg.reply(ctx, "Not in a voice").await);
-
-            return Ok(());
-        }
+    let connect_to = if let Some(channel) = channel_id {
+        channel
+    } else {
+        check_msg(msg.reply(ctx, "Not in a voice").await);
+        return Ok(());
     };
 
     let manager = songbird::get(ctx)
@@ -177,14 +83,15 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         );
 
         handle.add_global_event(
-            Event::Periodic(Duration::from_secs(60), None),
+            Event::Periodic(Duration::from_secs(10), None),
             TimeoutHandler {
-                guild,
-                channel_id,
-                timer: Default::default(),
+                guild_id,
+                text_channel_id: channel_id,
+                voice_channel_id: connect_to,
+                timer: AtomicUsize::default(),
                 ctx: ctx.clone(),
             },
-        )
+        );
     } else {
         check_msg(
             msg.channel_id
@@ -204,14 +111,14 @@ async fn deafen(handler_lock: Arc<Mutex<songbird::Call>>) {
     if handler.is_deaf() {
         println!("Client already deafened");
     } else if let Err(e) = handler.deafen(true).await {
-        eprintln!("Failed: {:?}", e)
+        eprintln!("Failed: {:?}", e);
     }
 }
 
 #[command]
 #[only_in(guilds)]
 /// Removes Sunny from the current voice channel and clears the queue.
-async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
+pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
@@ -246,18 +153,17 @@ async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 #[example("https://www.youtube.com/watch?v=dQw4w9WgXcQ")]
 /// While Sunny is in a voice channel, you may run the play command so that she
 /// can start streaming the given video URL.
-async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let url = match args.single::<String>() {
-        Ok(url) => url,
-        Err(_) => {
-            check_msg(
-                msg.channel_id
-                    .say(&ctx.http, "Must provide a URL to a video or audio")
-                    .await,
-            );
+pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let url = if let Ok(url) = args.single::<String>() {
+        url
+    } else {
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, "Must provide a URL to a video or audio")
+                .await,
+        );
 
-            return Ok(());
-        }
+        return Ok(());
     };
 
     if !url.starts_with("http") {
@@ -314,7 +220,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 /// Skips the currently playing song and moves to the next song in the queue.
-async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
@@ -350,7 +256,7 @@ async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 /// Stops playing the current song and clears the current song queue.
-async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
@@ -362,7 +268,7 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
         let queue = handler.queue();
-        let _ = queue.stop();
+        queue.stop();
 
         check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
     } else {
@@ -379,38 +285,8 @@ async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 /// Pong
-async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
+pub async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     check_msg(msg.channel_id.say(&ctx.http, "Pong!").await);
 
     Ok(())
-}
-
-fn check_msg(result: SerenityResult<Message>) {
-    if let Err(why) = result {
-        println!("Error sending message: {:?}", why);
-    }
-}
-
-pub async fn create_bot() {
-    let _ = dotenv();
-    let token = env::var("DISCORD_TOKEN").expect("Environment variable DISCORD_TOKEN not found");
-
-    let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!"))
-        .group(&GENERAL_GROUP)
-        .help(&HELP);
-
-    let mut client = Client::builder(&token)
-        .event_handler(Handler)
-        .framework(framework)
-        .register_songbird()
-        .await
-        .expect("Error creating client");
-
-    tokio::spawn(async move {
-        let _ = client
-            .start()
-            .await
-            .map_err(|why| println!("Client ended: {:?}", why));
-    });
 }
