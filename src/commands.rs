@@ -11,15 +11,16 @@ use serenity::{
         macros::{command, help},
         Args, CommandGroup, CommandResult, HelpOptions,
     },
-    model::{channel::Message, misc::Mentionable, prelude::UserId},
-    prelude::Mutex,
+    model::prelude::*,
+    prelude::*,
 };
+
 use songbird::input::restartable::Restartable;
 use songbird::{Event, TrackEvent};
 
 use crate::{
     handlers::{TimeoutHandler, TrackPlayNotifier},
-    utils::check_msg,
+    utils::{check_msg, generate_embed},
 };
 
 #[help]
@@ -210,6 +211,44 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         check_msg(
             msg.channel_id
                 .say(&ctx.http, "Not in a voice channel to play in")
+                .await,
+        );
+    }
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[aliases(np)]
+/// Shows the currently playing media
+pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = guild.id;
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice Client placed in at initialisation")
+        .clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        let queue = handler.queue();
+
+        if let Some(handle) = queue.current() {
+            let embed = generate_embed(handle.metadata());
+            check_msg(
+                msg.channel_id
+                    .send_message(&ctx.http, |m| m.set_embed(embed))
+                    .await,
+            );
+        } else {
+            check_msg(msg.reply(&ctx.http, "No song playing").await);
+        }
+    } else {
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, "Not in a voice channel")
                 .await,
         );
     }
