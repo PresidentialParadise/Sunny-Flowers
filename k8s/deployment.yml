@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: sunny-flowers
-        image: registry.xirion.net/library/sunny-flowers:0.5.0
+        image: registry.xirion.net/library/sunny-flowers:0.5.1
         imagePullPolicy: Always
         env:
           - name: DISCORD_TOKEN
