@@ -5,7 +5,7 @@ metadata:
   namespace: presidential-paradise
   labels:
     app: sunny-flowers
-    keel.sh/policy: force
+    keel.sh/policy: all
 spec:
   # Multiple replicas are _not_ supported
   replicas: 1
@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: sunny-flowers
-        image: registry.xirion.net/library/sunny-flowers:dev
+        image: registry.xirion.net/library/sunny-flowers:0.5.0
         imagePullPolicy: Always
         env:
           - name: DISCORD_TOKEN
