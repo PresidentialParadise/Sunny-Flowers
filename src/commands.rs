@@ -220,6 +220,7 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 #[command]
 #[only_in(guilds)]
+#[aliases(np)]
 /// Shows the currently playing media
 pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
