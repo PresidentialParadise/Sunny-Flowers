@@ -1,19 +1,19 @@
+#![allow(clippy::wildcard_imports)]
+
 mod commands;
 mod handlers;
 mod utils;
 
 use std::env;
 
-#[allow(clippy::wildcard_imports)]
 use commands::*;
 
 use dotenv::dotenv;
 
+use handlers::Handler;
 use serenity::{
-    async_trait,
-    client::{Client, Context, EventHandler},
+    client::Client,
     framework::{standard::macros::group, StandardFramework},
-    model::prelude::Ready,
 };
 
 use songbird::SerenityInit;
@@ -30,15 +30,6 @@ async fn main() {
         Err(e) => {
             eprintln!("Unable to listen for shutdown signal {}", e);
         }
-    }
-}
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected", ready.user.name);
     }
 }
 

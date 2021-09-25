@@ -3,18 +3,56 @@ use std::sync::{
     Arc,
 };
 
-use serenity::{
-    async_trait,
-    client::Context,
-    http::Http,
-    model::{
-        guild::Guild,
-        id::{ChannelId, GuildId, UserId},
-    },
-};
+use serenity::{async_trait, http::Http};
+
+use serenity::model::prelude::*;
+use serenity::prelude::*;
+
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
 
 use crate::utils::check_msg;
+
+pub struct Handler;
+
+#[async_trait]
+impl EventHandler for Handler {
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("{} is connected", ready.user.name);
+    }
+
+    async fn voice_state_update(
+        &self,
+        ctx: Context,
+        _: Option<GuildId>,
+        _: Option<VoiceState>,
+        voice_state: VoiceState,
+    ) {
+        let current_user_id = ctx.cache.current_user_id().await;
+
+        // If the state update does not concern us: ignore
+        if voice_state.user_id != current_user_id {
+            return;
+        }
+
+        // If our new state doesn't have a voice channel i.e. if we have been forcefully disconnected
+        if voice_state.channel_id.is_none() {
+            let guild_id = voice_state.guild_id.unwrap();
+
+            let manager = songbird::get(&ctx).await.unwrap();
+
+            if manager.get(guild_id).is_some() {
+                if let Err(err) = manager.remove(guild_id).await {
+                    eprintln!(
+                        "Error removing Sunny from songbird after state update {:?}",
+                        err
+                    );
+                }
+            }
+
+            println!("left succesfully after force disconnect");
+        }
+    }
+}
 
 pub struct TrackEndNotifier {
     pub channel_id: ChannelId,
