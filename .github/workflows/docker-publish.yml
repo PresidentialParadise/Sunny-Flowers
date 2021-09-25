@@ -6,12 +6,12 @@ name: Docker
 on:
   push:
     branches: [ dev ]
+    tags: [ '*' ]
 env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: registry.xirion.net
   # github.repository as <account>/<repo>
   IMAGE_NAME: library/sunny-flowers
-
 
 jobs:
   build:
