@@ -19,7 +19,7 @@ use serenity::{
 use songbird::SerenityInit;
 
 #[group]
-#[commands(join, leave, play, ping, skip, stop)]
+#[commands(join, leave, play, ping, skip, stop, now_playing)]
 struct General;
 
 #[tokio::main]
