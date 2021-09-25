@@ -18,7 +18,7 @@ use songbird::input::restartable::Restartable;
 use songbird::{Event, TrackEvent};
 
 use crate::{
-    handlers::{TimeoutHandler, TrackEndNotifier},
+    handlers::{TimeoutHandler, TrackPlayNotifier},
     utils::check_msg,
 };
 
@@ -75,8 +75,8 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         let mut handle = handle_lock.lock().await;
 
         handle.add_global_event(
-            Event::Track(TrackEvent::End),
-            TrackEndNotifier {
+            Event::Track(TrackEvent::Play),
+            TrackPlayNotifier {
                 channel_id,
                 http: send_http,
             },
@@ -238,7 +238,7 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
             msg.channel_id
                 .say(
                     &ctx.http,
-                    format!("Song skipped: {} in queue.", queue.len()),
+                    format!("Song skipped: {} in queue.", queue.len() - 1),
                 )
                 .await,
         );

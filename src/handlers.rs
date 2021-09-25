@@ -8,7 +8,7 @@ use serenity::{async_trait, http::Http};
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
-use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
+use songbird::{input::Metadata, Event, EventContext, EventHandler as VoiceEventHandler};
 
 use crate::utils::check_msg;
 
@@ -18,7 +18,7 @@ pub struct Handler;
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, _ready: Ready) {
         let activity = Activity::streaming(
-            "📻 Tropico News Today 🧨",
+            "\u{1f4fb} Tropico News Today \u{1f9e8}",
             "https://www.youtube.com/watch?v=k1BneeJTDcU",
         );
 
@@ -61,24 +61,64 @@ impl EventHandler for Handler {
     }
 }
 
-pub struct TrackEndNotifier {
+pub struct TrackPlayNotifier {
     pub channel_id: ChannelId,
     pub http: Arc<Http>,
 }
 
 #[async_trait]
-impl VoiceEventHandler for TrackEndNotifier {
+impl VoiceEventHandler for TrackPlayNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
-            check_msg(
-                self.channel_id
-                    .say(&self.http, format!("Tracks ended: {}", track_list.len()))
-                    .await,
-            );
+            if let Some(track) = track_list.first() {
+                check_msg(
+                    self.channel_id
+                        .send_message(&self.http, |m| {
+                            m.set_embed(generate_embed(track.1.metadata()))
+                        })
+                        .await,
+                );
+            }
         }
 
         None
     }
+}
+
+fn generate_embed(m: &Metadata) -> serenity::builder::CreateEmbed {
+    let mut e = serenity::builder::CreateEmbed::default();
+
+    e.author(|a| a.name("Now Playing:"));
+
+    let title = if let Some(track) = &m.track {
+        track
+    } else if let Some(title) = &m.title {
+        title
+    } else {
+        "Unknown Title"
+    };
+
+    let artist = if let Some(artist) = &m.artist {
+        artist
+    } else if let Some(channel) = &m.channel {
+        channel
+    } else {
+        "Unknown Artist"
+    };
+
+    e.title(format!("{} by {}", title, artist));
+
+    if let Some(thumbnail) = &m.thumbnail {
+        e.thumbnail(thumbnail);
+    }
+
+    if let Some(url) = &m.source_url {
+        e.url(url);
+    }
+
+    e.timestamp(&chrono::Utc::now());
+
+    e
 }
 
 pub struct TimeoutHandler {

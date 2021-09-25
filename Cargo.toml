@@ -17,3 +17,8 @@ serenity = { version = "0.10", features = [
 ]}
 songbird = { version = "0.2", features = ["builtin-queue"] }
 tokio = { version = "1.11", features = ["macros", "rt-multi-thread", "signal"] }
+chrono = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
