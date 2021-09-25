@@ -16,8 +16,15 @@ pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected", ready.user.name);
+    async fn ready(&self, ctx: Context, _ready: Ready) {
+        let activity = Activity::streaming(
+            "📻 Tropico News Today 🧨",
+            "https://www.youtube.com/watch?v=k1BneeJTDcU",
+        );
+
+        let status = OnlineStatus::DoNotDisturb;
+
+        ctx.set_presence(Some(activity), status).await;
     }
 
     async fn voice_state_update(
