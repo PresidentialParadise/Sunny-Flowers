@@ -201,7 +201,6 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 /// Shows the currently playing media
 pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
     let (current, track_list) = {
         let songbird = songbird::get(ctx)
@@ -209,7 +208,7 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
             .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?;
 
         let call_m = songbird
-            .get(guild_id)
+            .get(guild.id)
             .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
         let call = call_m.lock().await;
@@ -239,18 +238,16 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let songbird = songbird::get(ctx)
+    let call_m = songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
-
-    let call_m = songbird
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
         .get(guild_id)
         .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
     let call = call_m.lock().await;
     let queue = call.queue();
     let _ = queue.skip();
+
     check_msg(
         msg.channel_id
             .say(
@@ -271,27 +268,18 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 /// Stops playing the current song and clears the current song queue.
 pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
-    let songbird = songbird::get(ctx)
+    songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
+        .get(guild.id)
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird call".to_string())))?
+        .lock()
+        .await
+        .queue()
+        .stop();
 
-    if let Some(call_m) = songbird.get(guild_id) {
-        let call = call_m.lock().await;
-
-        let queue = call.queue();
-        queue.stop();
-
-        check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
-    } else {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Not in a voice channel")
-                .await,
-        );
-    }
+    check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
 
     Ok(())
 }
