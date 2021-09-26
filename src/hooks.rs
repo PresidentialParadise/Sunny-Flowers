@@ -35,7 +35,7 @@ pub async fn after_hook(
 ) {
     //  Print out an error if it happened
     if let Err(why) = error {
-        if let Some(reason) = why.downcast_ref::<Reason>() {
+        if let Some(reason) = why.downcast_ref::<Box<Reason>>() {
             handle_reason(ctx, msg, cmd_name, reason).await;
         } else {
             println!("Unknown Error in {}: {:?}", cmd_name, why);

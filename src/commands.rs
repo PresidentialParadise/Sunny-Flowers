@@ -67,6 +67,8 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
         let mut call = call_m.lock().await;
 
+        call.remove_all_global_events();
+
         call.add_global_event(
             Event::Track(TrackEvent::Play),
             TrackPlayNotifier {
