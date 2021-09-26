@@ -21,7 +21,7 @@ use songbird::{Event, TrackEvent};
 use crate::{
     checks::*,
     handlers::{TimeoutHandler, TrackPlayNotifier},
-    utils::{check_msg, generate_embed},
+    utils::{check_msg, generate_embed, generate_queue_embed},
 };
 
 #[help]
@@ -269,12 +269,12 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 #[checks(In_Voice)]
 /// Stops playing the current song and clears the current song queue.
 pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = msg.guild_id.unwrap();
 
     songbird::get(ctx)
         .await
         .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
-        .get(guild.id)
+        .get(guild_id)
         .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird call".to_string())))?
         .lock()
         .await
@@ -282,6 +282,33 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
         .stop();
 
     check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[aliases(q, queueueueu)]
+/// Shows the current queue
+pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild_id = msg.guild_id.unwrap();
+
+    let cq = songbird::get(ctx)
+        .await
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
+        .get(guild_id)
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird call".to_string())))?
+        .lock()
+        .await
+        .queue()
+        .current_queue();
+
+    let embed = generate_queue_embed(cq, 0);
+    check_msg(
+        msg.channel_id
+            .send_message(&ctx.http, |m| m.set_embed(embed))
+            .await,
+    );
 
     Ok(())
 }
