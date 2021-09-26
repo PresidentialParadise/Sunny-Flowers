@@ -21,6 +21,6 @@ RUN cargo build --release --locked --bin sunny_flowers
 
 FROM alpine:edge AS runtime
 WORKDIR /app
-RUN apk add --no-cache ffmpeg opus-dev youtube-dl
+RUN apk add --no-cache ffmpeg youtube-dl
 COPY --from=builder /app/target/release/sunny_flowers /usr/local/bin
 CMD ["/usr/local/bin/sunny_flowers"]

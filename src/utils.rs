@@ -7,26 +7,22 @@ pub fn check_msg(result: SerenityResult<Message>) {
     }
 }
 
-pub fn generate_embed(m: &Metadata) -> serenity::builder::CreateEmbed {
+pub fn generate_embed(m: &Metadata, m2: Option<&Metadata>) -> serenity::builder::CreateEmbed {
     let mut e = serenity::builder::CreateEmbed::default();
 
     e.author(|a| a.name("Now Playing:"));
 
-    let title = if let Some(track) = &m.track {
-        track
-    } else if let Some(title) = &m.title {
-        title
-    } else {
-        "Unknown Title"
-    };
+    let title = m
+        .track
+        .as_deref()
+        .or_else(|| m.title.as_deref())
+        .unwrap_or("Unknown Title");
 
-    let artist = if let Some(artist) = &m.artist {
-        artist
-    } else if let Some(channel) = &m.channel {
-        channel
-    } else {
-        "Unknown Artist"
-    };
+    let artist = m
+        .artist
+        .as_deref()
+        .or_else(|| m.channel.as_deref())
+        .unwrap_or("Unknown Artist");
 
     e.title(format!("{} by {}", title, artist));
 
@@ -36,6 +32,22 @@ pub fn generate_embed(m: &Metadata) -> serenity::builder::CreateEmbed {
 
     if let Some(url) = &m.source_url {
         e.url(url);
+    }
+
+    if let Some(m2) = m2 {
+        let title2 = m2
+            .track
+            .as_deref()
+            .or_else(|| m2.title.as_deref())
+            .unwrap_or("Unknown Title");
+
+        let artist2 = m2
+            .artist
+            .as_deref()
+            .or_else(|| m2.channel.as_deref())
+            .unwrap_or("Unknown Artist");
+
+        e.description(format!("**Up Next:** {} by {}", title2, artist2));
     }
 
     e.timestamp(&chrono::Utc::now());

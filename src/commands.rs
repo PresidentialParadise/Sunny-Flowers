@@ -15,7 +15,7 @@ use serenity::{
     prelude::*,
 };
 
-use songbird::input::restartable::Restartable;
+use songbird::{input::restartable::Restartable, tracks::TrackHandle};
 use songbird::{Event, TrackEvent};
 
 use crate::{
@@ -72,14 +72,14 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         );
 
         let channel_id = msg.channel_id;
-        let send_http = ctx.http.clone();
         let mut handle = handle_lock.lock().await;
 
         handle.add_global_event(
             Event::Track(TrackEvent::Play),
             TrackPlayNotifier {
                 channel_id,
-                http: send_http,
+                guild_id,
+                ctx: ctx.clone(),
             },
         );
 
@@ -234,9 +234,12 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
         let queue = handler.queue();
+        let track_list = queue.current_queue();
 
         if let Some(handle) = queue.current() {
-            let embed = generate_embed(handle.metadata());
+            let next_track = track_list.get(1).map(TrackHandle::metadata);
+
+            let embed = generate_embed(handle.metadata(), next_track);
             check_msg(
                 msg.channel_id
                     .send_message(&ctx.http, |m| m.set_embed(embed))

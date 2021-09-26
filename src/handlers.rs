@@ -1,9 +1,6 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serenity::{async_trait, http::Http};
+use serenity::async_trait;
 
 use serenity::model::prelude::*;
 use serenity::prelude::*;
@@ -63,18 +60,34 @@ impl EventHandler for Handler {
 
 pub struct TrackPlayNotifier {
     pub channel_id: ChannelId,
-    pub http: Arc<Http>,
+    pub ctx: Context,
+    pub guild_id: GuildId,
 }
 
 #[async_trait]
 impl VoiceEventHandler for TrackPlayNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
+            let manager = songbird::get(&self.ctx)
+                .await
+                .expect("Songbird voice client placed in at initialisation")
+                .clone();
+
             if let Some(track) = track_list.first() {
+                // * Waiting for Async Closures
+                let mut up_next = None;
+
+                if let Some(handler_lock) = manager.get(self.guild_id) {
+                    let handler = handler_lock.lock().await;
+                    let track_list = handler.queue().current_queue();
+
+                    up_next = track_list.get(1).map(|t| t.metadata().clone());
+                }
+
                 check_msg(
                     self.channel_id
-                        .send_message(&self.http, |m| {
-                            m.set_embed(generate_embed(track.1.metadata()))
+                        .send_message(&self.ctx.http, |m| {
+                            m.set_embed(generate_embed(track.1.metadata(), up_next.as_ref()))
                         })
                         .await,
                 );
