@@ -21,7 +21,7 @@ use songbird::{Event, TrackEvent};
 use crate::{
     checks::*,
     handlers::{TimeoutHandler, TrackPlayNotifier},
-    utils::{check_msg, check_user_in_voice, generate_embed},
+    utils::{check_msg, generate_embed},
 };
 
 #[help]
@@ -46,39 +46,31 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let channel_id = guild
+    let connect_to = guild
         .voice_states
         .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id);
-
-    let connect_to = if let Some(channel) = channel_id {
-        channel
-    } else {
-        check_msg(msg.reply(ctx, "Not in a voice").await);
-        return Ok(());
-    };
+        .and_then(|voice_state| voice_state.channel_id)
+        .ok_or_else(|| Box::new(Reason::User("Not in a voice".to_string())))?;
 
     let songbird = songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?;
 
     let (call_m, success) = songbird.join(guild_id, connect_to).await;
 
-    if let Ok(_channel) = success {
+    if success.is_ok() {
         check_msg(
             msg.channel_id
                 .say(&ctx.http, format!("Joined {}", connect_to.mention()))
                 .await,
         );
 
-        let channel_id = msg.channel_id;
         let mut call = call_m.lock().await;
 
         call.add_global_event(
             Event::Track(TrackEvent::Play),
             TrackPlayNotifier {
-                channel_id,
+                channel_id: msg.channel_id,
                 guild_id,
                 ctx: ctx.clone(),
             },
@@ -88,7 +80,7 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
             Event::Periodic(Duration::from_secs(60), None),
             TimeoutHandler {
                 guild_id,
-                text_channel_id: channel_id,
+                text_channel_id: msg.channel_id,
                 voice_channel_id: connect_to,
                 timer: AtomicUsize::default(),
                 ctx: ctx.clone(),
@@ -122,21 +114,22 @@ async fn deafen(call_m: Arc<Mutex<songbird::Call>>) {
 #[checks(In_Voice)]
 /// Removes Sunny from the current voice channel and clears the queue.
 pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg
+        .guild(&ctx.cache)
+        .await
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get guild".to_string())))?;
     let guild_id = guild.id;
 
     let songbird = songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?;
 
-    if let Err(e) = songbird.remove(guild_id).await {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, format!("Failed: {:?}", e))
-                .await,
-        );
-    }
+    songbird.remove(guild_id).await.map_err(|e| {
+        Box::new(Reason::UserAndLog {
+            user: "Failed to leave".to_string(),
+            log: e.to_string(),
+        })
+    })?;
 
     check_msg(msg.channel_id.say(&ctx.http, "Left voice").await);
 
@@ -153,17 +146,11 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 /// While Sunny is in a voice channel, you may run the play command so that she
 /// can start streaming the given video URL.
 pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let url = if let Ok(url) = args.single::<String>() {
-        url
-    } else {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Must provide a URL to a video or audio")
-                .await,
-        );
-
-        return Ok(());
-    };
+    let url: String = args.single().map_err(|_| {
+        Box::new(Reason::User(
+            "Must provide a URL to a video or audio".to_string(),
+        ))
+    })?;
 
     if !url.starts_with("http") {
         check_msg(
@@ -178,40 +165,22 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
+    let source = Restartable::ytdl(url, true).await.map_err(|e| {
+        Box::new(Reason::UserAndLog {
+            user: "Error starting stream".to_string(),
+            log: format!("Error sourcing ffmpeg {:?}", e),
+        })
+    })?;
+
     let songbird = songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?;
 
     let call_m = songbird
         .get(guild_id)
         .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
     let mut call = call_m.lock().await;
-    let voice_channel = call.current_channel().unwrap();
-    let name = serenity::model::id::ChannelId(voice_channel.0);
-
-    if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
-        check_msg(
-            msg.reply(
-                &ctx.http,
-                format!("I only take requests from users in {}", name.mention()),
-            )
-            .await,
-        );
-
-        return Ok(());
-    }
-
-    let source = match Restartable::ytdl(url, true).await {
-        Ok(source) => source,
-        Err(why) => {
-            println!("Err starting source {:?}", why);
-            check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
-
-            return Ok(());
-        }
-    };
 
     call.enqueue_source(source.into());
     check_msg(
@@ -232,33 +201,31 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 /// Shows the currently playing media
 pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
-    let songbird = songbird::get(ctx)
-        .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
+    let (current, track_list) = {
+        let songbird = songbird::get(ctx)
+            .await
+            .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?;
 
-    let call_m = songbird
-        .get(guild_id)
-        .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
+        let call_m = songbird
+            .get(guild.id)
+            .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
-    let call = call_m.lock().await;
-    let queue = call.queue();
-    let track_list = queue.current_queue();
+        let call = call_m.lock().await;
 
-    if let Some(handle) = queue.current() {
-        let next_track = track_list.get(1).map(TrackHandle::metadata);
+        (call.queue().current(), call.queue().current_queue())
+    };
 
-        let embed = generate_embed(handle.metadata(), next_track);
-        check_msg(
-            msg.channel_id
-                .send_message(&ctx.http, |m| m.set_embed(embed))
-                .await,
-        );
-    } else {
-        check_msg(msg.reply(&ctx.http, "No song playing").await);
-    }
+    let handle = current.ok_or_else(|| Box::new(Reason::User("No song playing".to_string())))?;
+
+    let next_track = track_list.get(1).map(TrackHandle::metadata);
+
+    let embed = generate_embed(handle.metadata(), next_track);
+    check_msg(
+        msg.channel_id
+            .send_message(&ctx.http, |m| m.set_embed(embed))
+            .await,
+    );
 
     Ok(())
 }
@@ -271,25 +238,23 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let songbird = songbird::get(ctx)
+    let call_m = songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
-
-    let call_m = songbird
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
         .get(guild_id)
         .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
     let call = call_m.lock().await;
     let queue = call.queue();
     let _ = queue.skip();
+
     check_msg(
         msg.channel_id
             .say(
                 &ctx.http,
                 format!(
                     "Song skipped: {} in queue.",
-                    isize::max(queue.len() as isize - 1, 0)
+                    queue.len().checked_sub(1).unwrap_or_default()
                 ),
             )
             .await,
@@ -303,27 +268,18 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 /// Stops playing the current song and clears the current song queue.
 pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
-    let songbird = songbird::get(ctx)
+    songbird::get(ctx)
         .await
-        .expect("Songbird Voice Client placed in at initialisation")
-        .clone();
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
+        .get(guild.id)
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird call".to_string())))?
+        .lock()
+        .await
+        .queue()
+        .stop();
 
-    if let Some(call_m) = songbird.get(guild_id) {
-        let call = call_m.lock().await;
-
-        let queue = call.queue();
-        queue.stop();
-
-        check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
-    } else {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Not in a voice channel")
-                .await,
-        );
-    }
+    check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
 
     Ok(())
 }
@@ -333,6 +289,5 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 /// Pong
 pub async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     check_msg(msg.channel_id.say(&ctx.http, "Pong!").await);
-
     Ok(())
 }
