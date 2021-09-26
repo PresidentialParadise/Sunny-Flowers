@@ -42,10 +42,10 @@ impl EventHandler for Handler {
         if voice_state.channel_id.is_none() {
             let guild_id = voice_state.guild_id.unwrap();
 
-            let manager = songbird::get(&ctx).await.unwrap();
+            let songbird = songbird::get(&ctx).await.unwrap();
 
-            if manager.get(guild_id).is_some() {
-                if let Err(err) = manager.remove(guild_id).await {
+            if songbird.get(guild_id).is_some() {
+                if let Err(err) = songbird.remove(guild_id).await {
                     eprintln!(
                         "Error removing Sunny from songbird after state update {:?}",
                         err
@@ -68,7 +68,7 @@ pub struct TrackPlayNotifier {
 impl VoiceEventHandler for TrackPlayNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
-            let manager = songbird::get(&self.ctx)
+            let songbird = songbird::get(&self.ctx)
                 .await
                 .expect("Songbird voice client placed in at initialisation")
                 .clone();
@@ -77,9 +77,9 @@ impl VoiceEventHandler for TrackPlayNotifier {
                 // * Waiting for Async Closures
                 let mut up_next = None;
 
-                if let Some(handler_lock) = manager.get(self.guild_id) {
-                    let handler = handler_lock.lock().await;
-                    let track_list = handler.queue().current_queue();
+                if let Some(call_m) = songbird.get(self.guild_id) {
+                    let call = call_m.lock().await;
+                    let track_list = call.queue().current_queue();
 
                     up_next = track_list.get(1).map(|t| t.metadata().clone());
                 }
@@ -118,12 +118,12 @@ impl VoiceEventHandler for TimeoutHandler {
             let prev = self.timer.fetch_add(1, Ordering::Relaxed);
 
             if prev >= 5 {
-                let manager = songbird::get(&self.ctx)
+                let songbird = songbird::get(&self.ctx)
                     .await
                     .expect("Songbird Voice Client placed in at initialisation")
                     .clone();
 
-                if let Err(e) = manager.remove(self.guild_id).await {
+                if let Err(e) = songbird.remove(self.guild_id).await {
                     eprintln!("Failed: {:?}", e);
                 }
 

@@ -1,12 +1,16 @@
 #![allow(clippy::wildcard_imports)]
 
+mod checks;
 mod commands;
 mod handlers;
+mod hooks;
 mod utils;
 
 use std::env;
+use std::process::exit;
 
 use commands::*;
+use hooks::{after_hook, dispatch_error_hook};
 
 use dotenv::dotenv;
 
@@ -24,6 +28,9 @@ struct General;
 
 #[tokio::main]
 async fn main() {
+    println!("Starting sunny");
+    eprintln!("e: Starting sunny");
+
     create_bot().await;
     match tokio::signal::ctrl_c().await {
         Ok(()) => println!("Received Ctrl-C, shutting down."),
@@ -40,7 +47,9 @@ pub async fn create_bot() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
         .group(&GENERAL_GROUP)
-        .help(&HELP);
+        .help(&HELP)
+        .on_dispatch_error(dispatch_error_hook)
+        .after(after_hook);
 
     let mut client = Client::builder(&token)
         .event_handler(Handler)
@@ -53,6 +62,7 @@ pub async fn create_bot() {
         let _ = client
             .start()
             .await
-            .map_err(|why| println!("Client ended: {:?}", why));
+            .map_err(|why| eprintln!("Client ended: {:?}", why));
+        exit(1);
     });
 }

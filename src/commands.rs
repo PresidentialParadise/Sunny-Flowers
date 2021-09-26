@@ -9,7 +9,7 @@ use serenity::{
     framework::standard::{
         help_commands,
         macros::{command, help},
-        Args, CommandGroup, CommandResult, HelpOptions,
+        Args, CommandGroup, CommandResult, HelpOptions, Reason,
     },
     model::prelude::*,
     prelude::*,
@@ -19,6 +19,7 @@ use songbird::{input::restartable::Restartable, tracks::TrackHandle};
 use songbird::{Event, TrackEvent};
 
 use crate::{
+    checks::*,
     handlers::{TimeoutHandler, TrackPlayNotifier},
     utils::{check_msg, check_user_in_voice, generate_embed},
 };
@@ -57,12 +58,12 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     };
 
-    let manager = songbird::get(ctx)
+    let songbird = songbird::get(ctx)
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
 
-    let (handle_lock, success) = manager.join(guild_id, connect_to).await;
+    let (call_m, success) = songbird.join(guild_id, connect_to).await;
 
     if let Ok(_channel) = success {
         check_msg(
@@ -72,9 +73,9 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         );
 
         let channel_id = msg.channel_id;
-        let mut handle = handle_lock.lock().await;
+        let mut call = call_m.lock().await;
 
-        handle.add_global_event(
+        call.add_global_event(
             Event::Track(TrackEvent::Play),
             TrackPlayNotifier {
                 channel_id,
@@ -83,7 +84,7 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
             },
         );
 
-        handle.add_global_event(
+        call.add_global_event(
             Event::Periodic(Duration::from_secs(60), None),
             TimeoutHandler {
                 guild_id,
@@ -101,62 +102,43 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         );
     }
 
-    deafen(handle_lock).await;
+    deafen(call_m).await;
 
     Ok(())
 }
 
-async fn deafen(handler_lock: Arc<Mutex<songbird::Call>>) {
-    let mut handler = handler_lock.lock().await;
+async fn deafen(call_m: Arc<Mutex<songbird::Call>>) {
+    let mut call = call_m.lock().await;
 
-    if handler.is_deaf() {
+    if call.is_deaf() {
         println!("Client already deafened");
-    } else if let Err(e) = handler.deafen(true).await {
+    } else if let Err(e) = call.deafen(true).await {
         eprintln!("Failed: {:?}", e);
     }
 }
 
 #[command]
 #[only_in(guilds)]
+#[checks(In_Voice)]
 /// Removes Sunny from the current voice channel and clears the queue.
 pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx)
+    let songbird = songbird::get(ctx)
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let voice_channel = handler.current_channel().unwrap();
-        let name = serenity::model::id::ChannelId(voice_channel.0);
-
-        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
-            check_msg(
-                msg.reply(
-                    &ctx.http,
-                    format!("I only take requests from users in {}", name.mention()),
-                )
+    if let Err(e) = songbird.remove(guild_id).await {
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, format!("Failed: {:?}", e))
                 .await,
-            );
-
-            return Ok(());
-        }
-
-        if let Err(e) = manager.remove(guild_id).await {
-            check_msg(
-                msg.channel_id
-                    .say(&ctx.http, format!("Failed: {:?}", e))
-                    .await,
-            );
-        }
-
-        check_msg(msg.channel_id.say(&ctx.http, "Left voice").await);
-    } else {
-        check_msg(msg.reply(ctx, "Not in a voice channel").await);
+        );
     }
+
+    check_msg(msg.channel_id.say(&ctx.http, "Left voice").await);
 
     Ok(())
 }
@@ -167,6 +149,7 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 #[usage("<url>")]
 #[example("https://www.youtube.com/watch?v=dQw4w9WgXcQ")]
+#[checks(In_Voice)]
 /// While Sunny is in a voice channel, you may run the play command so that she
 /// can start streaming the given video URL.
 pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
@@ -195,54 +178,50 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx)
+    let songbird = songbird::get(ctx)
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        let voice_channel = handler.current_channel().unwrap();
-        let name = serenity::model::id::ChannelId(voice_channel.0);
+    let call_m = songbird
+        .get(guild_id)
+        .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
-        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
-            check_msg(
-                msg.reply(
-                    &ctx.http,
-                    format!("I only take requests from users in {}", name.mention()),
-                )
-                .await,
-            );
+    let mut call = call_m.lock().await;
+    let voice_channel = call.current_channel().unwrap();
+    let name = serenity::model::id::ChannelId(voice_channel.0);
+
+    if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
+        check_msg(
+            msg.reply(
+                &ctx.http,
+                format!("I only take requests from users in {}", name.mention()),
+            )
+            .await,
+        );
+
+        return Ok(());
+    }
+
+    let source = match Restartable::ytdl(url, true).await {
+        Ok(source) => source,
+        Err(why) => {
+            println!("Err starting source {:?}", why);
+            check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
 
             return Ok(());
         }
+    };
 
-        let source = match Restartable::ytdl(url, true).await {
-            Ok(source) => source,
-            Err(why) => {
-                println!("Err starting source {:?}", why);
-                check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
-
-                return Ok(());
-            }
-        };
-
-        handler.enqueue_source(source.into());
-        check_msg(
-            msg.channel_id
-                .say(
-                    &ctx.http,
-                    format!("Added song to queue: position {}", handler.queue().len()),
-                )
-                .await,
-        );
-    } else {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Not in a voice channel to play in")
-                .await,
-        );
-    }
+    call.enqueue_source(source.into());
+    check_msg(
+        msg.channel_id
+            .say(
+                &ctx.http,
+                format!("Added song to queue: position {}", call.queue().len()),
+            )
+            .await,
+    );
 
     Ok(())
 }
@@ -255,34 +234,30 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx)
+    let songbird = songbird::get(ctx)
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        let queue = handler.queue();
-        let track_list = queue.current_queue();
+    let call_m = songbird
+        .get(guild_id)
+        .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
-        if let Some(handle) = queue.current() {
-            let next_track = track_list.get(1).map(TrackHandle::metadata);
+    let call = call_m.lock().await;
+    let queue = call.queue();
+    let track_list = queue.current_queue();
 
-            let embed = generate_embed(handle.metadata(), next_track);
-            check_msg(
-                msg.channel_id
-                    .send_message(&ctx.http, |m| m.set_embed(embed))
-                    .await,
-            );
-        } else {
-            check_msg(msg.reply(&ctx.http, "No song playing").await);
-        }
-    } else {
+    if let Some(handle) = queue.current() {
+        let next_track = track_list.get(1).map(TrackHandle::metadata);
+
+        let embed = generate_embed(handle.metadata(), next_track);
         check_msg(
             msg.channel_id
-                .say(&ctx.http, "Not in a voice channel")
+                .send_message(&ctx.http, |m| m.set_embed(embed))
                 .await,
         );
+    } else {
+        check_msg(msg.reply(&ctx.http, "No song playing").await);
     }
 
     Ok(())
@@ -290,87 +265,55 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
 
 #[command]
 #[only_in(guilds)]
+#[checks(In_Voice)]
 /// Skips the currently playing song and moves to the next song in the queue.
 pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx)
+    let songbird = songbird::get(ctx)
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
+    let call_m = songbird
+        .get(guild_id)
+        .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
-        let voice_channel = handler.current_channel().unwrap();
-        let name = serenity::model::id::ChannelId(voice_channel.0);
-
-        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
-            check_msg(
-                msg.reply(
-                    &ctx.http,
-                    format!("I only take requests from users in {}", name.mention()),
-                )
-                .await,
-            );
-
-            return Ok(());
-        }
-
-        let queue = handler.queue();
-        let _ = queue.skip();
-
-        check_msg(
-            msg.channel_id
-                .say(
-                    &ctx.http,
-                    format!("Song skipped: {} in queue.", queue.len() - 1),
-                )
-                .await,
-        );
-    } else {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Not in a voice channel")
-                .await,
-        );
-    }
-
+    let call = call_m.lock().await;
+    let queue = call.queue();
+    let _ = queue.skip();
+    check_msg(
+        msg.channel_id
+            .say(
+                &ctx.http,
+                format!(
+                    "Song skipped: {} in queue.",
+                    isize::max(queue.len() as isize - 1, 0)
+                ),
+            )
+            .await,
+    );
     Ok(())
 }
 
 #[command]
 #[only_in(guilds)]
+#[checks(In_Voice)]
 /// Stops playing the current song and clears the current song queue.
 pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
-    let manager = songbird::get(ctx)
+    let songbird = songbird::get(ctx)
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let handler = handler_lock.lock().await;
+    if let Some(call_m) = songbird.get(guild_id) {
+        let call = call_m.lock().await;
 
-        let voice_channel = handler.current_channel().unwrap();
-        let name = serenity::model::id::ChannelId(voice_channel.0);
-
-        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
-            check_msg(
-                msg.reply(
-                    &ctx.http,
-                    format!("I only take requests from users in {}", name.mention()),
-                )
-                .await,
-            );
-
-            return Ok(());
-        }
-
-        let queue = handler.queue();
+        let queue = call.queue();
         queue.stop();
 
         check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
