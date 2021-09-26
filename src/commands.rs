@@ -20,7 +20,7 @@ use songbird::{Event, TrackEvent};
 
 use crate::{
     handlers::{TimeoutHandler, TrackPlayNotifier},
-    utils::{check_msg, generate_embed},
+    utils::{check_msg, check_user_in_voice, generate_embed},
 };
 
 #[help]
@@ -84,7 +84,7 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         );
 
         handle.add_global_event(
-            Event::Periodic(Duration::from_secs(10), None),
+            Event::Periodic(Duration::from_secs(60), None),
             TimeoutHandler {
                 guild_id,
                 text_channel_id: channel_id,
@@ -127,9 +127,24 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
         .await
         .expect("Songbird Voice Client placed in at initialisation")
         .clone();
-    let has_handler = manager.get(guild_id).is_some();
 
-    if has_handler {
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let handler = handler_lock.lock().await;
+        let voice_channel = handler.current_channel().unwrap();
+        let name = serenity::model::id::ChannelId(voice_channel.0);
+
+        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
+            check_msg(
+                msg.reply(
+                    &ctx.http,
+                    format!("I only take requests from users in {}", name.mention()),
+                )
+                .await,
+            );
+
+            return Ok(());
+        }
+
         if let Err(e) = manager.remove(guild_id).await {
             check_msg(
                 msg.channel_id
@@ -187,6 +202,20 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
+        let voice_channel = handler.current_channel().unwrap();
+        let name = serenity::model::id::ChannelId(voice_channel.0);
+
+        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
+            check_msg(
+                msg.reply(
+                    &ctx.http,
+                    format!("I only take requests from users in {}", name.mention()),
+                )
+                .await,
+            );
+
+            return Ok(());
+        }
 
         let source = match Restartable::ytdl(url, true).await {
             Ok(source) => source,
@@ -273,6 +302,22 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
+
+        let voice_channel = handler.current_channel().unwrap();
+        let name = serenity::model::id::ChannelId(voice_channel.0);
+
+        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
+            check_msg(
+                msg.reply(
+                    &ctx.http,
+                    format!("I only take requests from users in {}", name.mention()),
+                )
+                .await,
+            );
+
+            return Ok(());
+        }
+
         let queue = handler.queue();
         let _ = queue.skip();
 
@@ -309,6 +354,22 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let handler = handler_lock.lock().await;
+
+        let voice_channel = handler.current_channel().unwrap();
+        let name = serenity::model::id::ChannelId(voice_channel.0);
+
+        if !check_user_in_voice(&guild, voice_channel, msg.author.id) {
+            check_msg(
+                msg.reply(
+                    &ctx.http,
+                    format!("I only take requests from users in {}", name.mention()),
+                )
+                .await,
+            );
+
+            return Ok(());
+        }
+
         let queue = handler.queue();
         queue.stop();
 
