@@ -303,7 +303,7 @@ pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         .queue()
         .current_queue();
 
-    let embed = generate_queue_embed(cq, 0);
+    let embed = generate_queue_embed(&cq, 0);
     check_msg(
         msg.channel_id
             .send_message(&ctx.http, |m| m.set_embed(embed))

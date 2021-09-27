@@ -38,13 +38,11 @@ pub fn generate_embed(m: &Metadata, m2: Option<&Metadata>) -> serenity::builder:
     e
 }
 
-pub fn generate_queue_embed(
-    queue: Vec<TrackHandle>,
-    page: usize,
-) -> serenity::builder::CreateEmbed {
+pub fn generate_queue_embed(queue: &[TrackHandle], page: usize) -> serenity::builder::CreateEmbed {
     let mut titles = Vec::with_capacity(10);
     let mut artists = Vec::with_capacity(10);
     let mut durs = Vec::with_capacity(10);
+    let mut total_duration: (u64, u64) = (0, 0);
 
     for (i, track) in queue.iter().enumerate().skip(page * 10).take(10) {
         let m = track.metadata();
@@ -58,7 +56,11 @@ pub fn generate_queue_embed(
         let duration = m.duration.unwrap_or_default();
         let seconds = duration.as_secs() % 60;
         let minutes = duration.as_secs() / 60;
-        durs.push(format!("`[{}:{}]`\n", minutes, seconds));
+
+        total_duration.0 += minutes;
+        total_duration.1 += seconds;
+
+        durs.push(format!("`[{}:{:02}]`\n", minutes, seconds));
     }
 
     let mut e = serenity::builder::CreateEmbed::default();
@@ -93,7 +95,15 @@ pub fn generate_queue_embed(
         true,
     );
 
-    e.footer(|f| f.text(format!("Page {}/{}.", page + 1, queue.len() / 10 + 1)));
+    e.footer(|f| {
+        f.text(format!(
+            "Page {}/{} | Total Duration: {:02}:{:02}",
+            page + 1,
+            (queue.len() / 10 + 1),
+            total_duration.0,
+            total_duration.1,
+        ))
+    });
 
     e
 }
