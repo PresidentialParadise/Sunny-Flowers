@@ -6,8 +6,7 @@ mod handlers;
 mod hooks;
 mod utils;
 
-use std::env;
-use std::process::exit;
+use std::{env};
 
 use commands::*;
 use hooks::{after_hook, dispatch_error_hook};
@@ -18,6 +17,8 @@ use handlers::Handler;
 use serenity::{
     client::Client,
     framework::{standard::macros::group, StandardFramework},
+    futures::select,
+    FutureExt
 };
 
 use songbird::SerenityInit;
@@ -31,19 +32,22 @@ async fn main() {
     println!("Starting sunny");
     eprintln!("e: Starting sunny");
 
-    create_bot().await;
-    match tokio::signal::ctrl_c().await {
-        Ok(()) => println!("Received Ctrl-C, shutting down."),
-        Err(e) => {
-            eprintln!("Unable to listen for shutdown signal {}", e);
-        }
-    }
-}
-
-pub async fn create_bot() {
     dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("Environment variable DISCORD_TOKEN not found");
 
+    select! {
+        res = start_bot(token).fuse() => match res {
+            Err(e) => eprintln!("Unable to listen for shutdown signal {}", e),
+            _ => unreachable!()
+        },
+        res = tokio::signal::ctrl_c().fuse() => match res {
+            Ok(()) => println!("Received Ctrl-C, shutting down."),
+            Err(e) => eprintln!("Unable to listen for shutdown signal {}", e)
+        }
+    };
+}
+
+pub async fn start_bot(token: String) -> Result<(), serenity::Error> {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
         .group(&GENERAL_GROUP)
@@ -58,11 +62,5 @@ pub async fn create_bot() {
         .await
         .expect("Error creating client");
 
-    tokio::spawn(async move {
-        let _ = client
-            .start()
-            .await
-            .map_err(|why| eprintln!("Client ended: {:?}", why));
-        exit(1);
-    });
+    client.start().await
 }

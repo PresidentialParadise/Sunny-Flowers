@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serenity::async_trait;
+use serenity::{async_trait, futures::future::OptionFuture};
 
 use serenity::model::prelude::*;
 use serenity::prelude::*;
@@ -74,15 +74,18 @@ impl VoiceEventHandler for TrackPlayNotifier {
                 .clone();
 
             if let Some(track) = track_list.first() {
-                // * Waiting for Async Closures
-                let mut up_next = None;
-
-                if let Some(call_m) = songbird.get(self.guild_id) {
-                    let call = call_m.lock().await;
-                    let track_list = call.queue().current_queue();
-
-                    up_next = track_list.get(1).map(|t| t.metadata().clone());
-                }
+                let up_next =
+                    OptionFuture::from(songbird.get(self.guild_id).map(|call_m| async move {
+                        call_m
+                            .lock()
+                            .await
+                            .queue()
+                            .current_queue()
+                            .get(1)
+                            .map(|t| t.metadata().to_owned())
+                    }))
+                    .await
+                    .flatten();
 
                 check_msg(
                     self.channel_id
@@ -134,7 +137,7 @@ impl VoiceEventHandler for TimeoutHandler {
                 );
             }
         } else {
-            let _ = self.timer.swap(0, Ordering::Relaxed);
+            self.timer.store(0, Ordering::Relaxed);
         }
 
         None
