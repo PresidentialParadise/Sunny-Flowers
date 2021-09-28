@@ -14,6 +14,8 @@ serenity = { version = "0.10", features = [
     "client",
     "standard_framework",
     "voice",
+    "unstable_discord_api",
+    "collector"
 ]}
 songbird = { version = "0.2", features = ["builtin-queue"] }
 tokio = { version = "1.11", features = ["macros", "rt-multi-thread", "signal"] }

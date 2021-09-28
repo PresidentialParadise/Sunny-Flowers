@@ -11,7 +11,11 @@ use serenity::{
         macros::{command, help},
         Args, CommandGroup, CommandResult, HelpOptions, Reason,
     },
-    model::prelude::*,
+    futures::prelude::*,
+    model::{
+        interactions::message_component::{ButtonStyle, InteractionMessage},
+        prelude::*,
+    },
     prelude::*,
 };
 
@@ -303,12 +307,46 @@ pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         .queue()
         .current_queue();
 
-    let embed = generate_queue_embed(&cq, 0);
-    check_msg(
-        msg.channel_id
-            .send_message(&ctx.http, |m| m.set_embed(embed))
-            .await,
-    );
+    let mut page = 0;
+
+    const prev_id: &str = "q_prev";
+    const next_id: &str = "q_next";
+
+    let collector = msg
+        .channel_id
+        .send_message(&ctx.http, |m| {
+            m.components(|c| {
+                c.create_action_row(|r| {
+                    r.create_button(|b| {
+                        b.style(ButtonStyle::Danger);
+                        b.label("Previous");
+                        b.custom_id(prev_id);
+                        b.disabled(true)
+                    });
+                    r.create_button(|b| {
+                        b.style(ButtonStyle::Primary);
+                        b.label("Next");
+                        b.custom_id(next_id)
+                    })
+                })
+            });
+
+            m.set_embed(generate_queue_embed(&cq, page))
+        })
+        .await
+        .unwrap()
+        .await_component_interactions(&ctx.shard)
+        .timeout(Duration::from_secs(3 * 60))
+        .await;
+
+    while let Some(mci) = collector.next().await {
+        mci.create_interaction_response(&ctx.http, |cir| {
+            cir.kind(InteractionResponseType::UpdateMessage)
+                .interaction_response_data(|msg| msg.content(format("Page: {}", page += 1)))
+        })
+        .await
+        .unwrap();
+    }
 
     Ok(())
 }
