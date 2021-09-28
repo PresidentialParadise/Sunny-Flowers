@@ -1,5 +1,6 @@
 use serenity::{model::channel::Message, Result as SerenityResult};
 use songbird::{input::Metadata, tracks::TrackHandle};
+use std::time::Duration;
 
 pub fn check_msg(result: SerenityResult<Message>) {
     if let Err(why) = result {
@@ -42,7 +43,9 @@ pub fn generate_queue_embed(queue: &[TrackHandle], page: usize) -> serenity::bui
     let mut titles = Vec::with_capacity(10);
     let mut artists = Vec::with_capacity(10);
     let mut durs = Vec::with_capacity(10);
-    let mut total_duration: (u64, u64) = (0, 0);
+    let total_duration = queue.iter().fold(Duration::default(), |a, b| {
+        a + b.metadata().duration.unwrap_or_default()
+    });
 
     for (i, track) in queue.iter().enumerate().skip(page * 10).take(10) {
         let m = track.metadata();
@@ -57,10 +60,7 @@ pub fn generate_queue_embed(queue: &[TrackHandle], page: usize) -> serenity::bui
         let seconds = duration.as_secs() % 60;
         let minutes = duration.as_secs() / 60;
 
-        total_duration.0 += minutes;
-        total_duration.1 += seconds;
-
-        durs.push(format!("`[{}:{:02}]`\n", minutes, seconds));
+        durs.push(format!("[{}:{:02}]\n", minutes, seconds));
     }
 
     let mut e = serenity::builder::CreateEmbed::default();
@@ -96,12 +96,15 @@ pub fn generate_queue_embed(queue: &[TrackHandle], page: usize) -> serenity::bui
     );
 
     e.footer(|f| {
+        let seconds = total_duration.as_secs() % 60;
+        let minutes = total_duration.as_secs() / 60;
+
         f.text(format!(
             "Page {}/{} | Total Duration: {:02}:{:02}",
             page + 1,
             (queue.len() / 10 + 1),
-            total_duration.0,
-            total_duration.1,
+            minutes,
+            seconds,
         ))
     });
 
