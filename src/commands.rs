@@ -5,13 +5,15 @@ use std::{
 };
 
 use serenity::{
+    builder::CreateActionRow,
     client::Context,
     framework::standard::{
         help_commands,
         macros::{command, help},
         Args, CommandGroup, CommandResult, HelpOptions, Reason,
     },
-    model::prelude::*,
+    futures::prelude::*,
+    model::{interactions::message_component::ButtonStyle, prelude::*},
     prelude::*,
 };
 
@@ -21,7 +23,7 @@ use songbird::{Event, TrackEvent};
 use crate::{
     checks::*,
     handlers::{TimeoutHandler, TrackPlayNotifier},
-    utils::{check_msg, generate_embed},
+    utils::{check_msg, generate_embed, generate_queue_embed},
 };
 
 #[help]
@@ -269,12 +271,12 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 #[checks(In_Voice)]
 /// Stops playing the current song and clears the current song queue.
 pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = msg.guild_id.unwrap();
 
     songbird::get(ctx)
         .await
         .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
-        .get(guild.id)
+        .get(guild_id)
         .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird call".to_string())))?
         .lock()
         .await
@@ -282,6 +284,126 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
         .stop();
 
     check_msg(msg.channel_id.say(&ctx.http, "Queue cleared.").await);
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[aliases(q, queueueueu)]
+/// Shows the current queue
+pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
+    const PREV_ID: &str = "q_prev";
+    const NEXT_ID: &str = "q_next";
+
+    fn build_action_row(page: usize, queue_len: usize) -> CreateActionRow {
+        let pages = queue_len / 10;
+        let mut row = CreateActionRow::default();
+
+        // Previous button
+        if page > 0 {
+            row.create_button(|b| {
+                b.style(ButtonStyle::Primary);
+                b.label("Previous");
+                b.custom_id(PREV_ID);
+                b.disabled(false)
+            });
+        } else {
+            row.create_button(|b| {
+                b.style(ButtonStyle::Danger);
+                b.label("Previous");
+                b.custom_id(PREV_ID);
+                b.disabled(true)
+            });
+        }
+
+        // Next button
+        if pages >= 1 && page < pages {
+            row.create_button(|b| {
+                b.style(ButtonStyle::Primary);
+                b.label("Next");
+                b.custom_id(NEXT_ID);
+                b.disabled(false)
+            });
+        } else {
+            row.create_button(|b| {
+                b.style(ButtonStyle::Danger);
+                b.label("Next");
+                b.custom_id(NEXT_ID);
+                b.disabled(true)
+            });
+        }
+
+        row
+    }
+
+    let guild_id = msg.guild_id.unwrap();
+
+    // Retrieve the current queue
+    let cq = songbird::get(ctx)
+        .await
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?
+        .get(guild_id)
+        .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird call".to_string())))?
+        .lock()
+        .await
+        .queue()
+        .current_queue();
+
+    // Currently shown page
+    let mut page = 0;
+
+    // Send initial queue message
+    let mut message = msg
+        .channel_id
+        .send_message(&ctx.http, |m| {
+            m.components(|c| c.set_action_rows(vec![build_action_row(page, cq.len())]));
+            m.set_embed(generate_queue_embed(&cq, page))
+        })
+        .await
+        .map_err(|e| {
+            Box::new(Reason::Log(format!(
+                "Unable to send queue message: {:?}",
+                e
+            )))
+        })?;
+
+    // await interactions i.e. button presses
+    let mut collector = message
+        .await_component_interactions(&ctx.shard)
+        .timeout(Duration::from_secs(3 * 60))
+        .await;
+
+    // Process button presses
+    while let Some(mci) = collector.next().await {
+        if mci.data.custom_id == NEXT_ID {
+            page += 1;
+        } else if mci.data.custom_id == PREV_ID {
+            page -= 1;
+        } else {
+            continue;
+        }
+
+        // Change the embed + buttons after page change
+        mci.create_interaction_response(&ctx.http, |cir| {
+            cir.kind(InteractionResponseType::UpdateMessage)
+                .interaction_response_data(|m| {
+                    m.add_embed(generate_queue_embed(&cq, page));
+                    m.components(|c| c.set_action_rows(vec![build_action_row(page, cq.len())]))
+                })
+        })
+        .await
+        .map_err(|e| Box::new(Reason::Log(format!("Unable to create interaction response: {:?}", e))))?;
+    }
+
+    // Remove buttons after timeout
+    message
+        .edit(&ctx.http, |e| {
+            e.components(|c| c);
+            e.set_embed(generate_queue_embed(&cq, page))
+        })
+        .await
+        .map_err(|e| Box::new(Reason::Log(format!("Unable clear buttons {:?}", e))))?;
 
     Ok(())
 }

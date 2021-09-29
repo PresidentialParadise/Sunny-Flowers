@@ -23,7 +23,7 @@ use serenity::{
 use songbird::SerenityInit;
 
 #[group]
-#[commands(join, leave, play, ping, skip, stop, now_playing)]
+#[commands(join, leave, play, ping, skip, stop, now_playing, queue)]
 struct General;
 
 #[tokio::main]
@@ -43,9 +43,13 @@ async fn main() {
 pub async fn create_bot() {
     dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("Environment variable DISCORD_TOKEN not found");
+    let app_id = env::var("APP_ID")
+        .expect("Environment variable APP_ID not found")
+        .parse()
+        .expect("APP_ID needs to be a number");
 
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!"))
+        .configure(|c| c.prefix("?"))
         .group(&GENERAL_GROUP)
         .help(&HELP)
         .on_dispatch_error(dispatch_error_hook)
@@ -55,6 +59,7 @@ pub async fn create_bot() {
         .event_handler(Handler)
         .framework(framework)
         .register_songbird()
+        .application_id(app_id)
         .await
         .expect("Error creating client");
 
