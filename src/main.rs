@@ -6,7 +6,7 @@ mod handlers;
 mod hooks;
 mod utils;
 
-use std::{env};
+use std::env;
 
 use commands::*;
 use hooks::{after_hook, dispatch_error_hook};
@@ -18,7 +18,7 @@ use serenity::{
     client::Client,
     framework::{standard::macros::group, StandardFramework},
     futures::select,
-    FutureExt
+    FutureExt,
 };
 
 use songbird::SerenityInit;
