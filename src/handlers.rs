@@ -82,7 +82,7 @@ impl VoiceEventHandler for TrackPlayNotifier {
                             .queue()
                             .current_queue()
                             .get(1)
-                            .map(|t| t.metadata().to_owned())
+                            .map(|t| t.metadata().clone())
                     }))
                     .await
                     .flatten();

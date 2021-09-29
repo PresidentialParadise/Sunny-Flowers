@@ -393,7 +393,12 @@ pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
                 })
         })
         .await
-        .map_err(|e| Box::new(Reason::Log(format!("Unable to create interaction response: {:?}", e))))?;
+        .map_err(|e| {
+            Box::new(Reason::Log(format!(
+                "Unable to create interaction response: {:?}",
+                e
+            )))
+        })?;
     }
 
     // Remove buttons after timeout
