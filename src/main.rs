@@ -67,7 +67,7 @@ async fn main() {
 
 pub async fn init_bot(token: String, app_id: u64) -> Client {
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!"))
+        .configure(|c| c.prefix("?"))
         .group(&GENERAL_GROUP)
         .help(&HELP)
         .on_dispatch_error(dispatch_error_hook)

@@ -8,7 +8,16 @@ pub fn check_msg(result: SerenityResult<Message>) {
     }
 }
 
-pub fn generate_embed(m: &Metadata, m2: Option<&Metadata>) -> serenity::builder::CreateEmbed {
+/// `split_duration` splits a [`Duration`] into a (minutes, seconds) tuple
+const fn split_duration(d: Duration) -> (u64, u64) {
+    (d.as_secs() / 60, d.as_secs() % 60)
+}
+
+pub fn generate_embed(
+    m: &Metadata,
+    pos: Duration,
+    m2: Option<&Metadata>,
+) -> serenity::builder::CreateEmbed {
     let mut e = serenity::builder::CreateEmbed::default();
 
     e.author(|a| a.name("Now Playing:"));
@@ -27,13 +36,18 @@ pub fn generate_embed(m: &Metadata, m2: Option<&Metadata>) -> serenity::builder:
         e.url(url);
     }
 
-    if let Some(m2) = m2 {
-        let title2 = get_title(m2);
-        let artist2 = get_artist(m2);
+    let (curr_min, curr_sec) = split_duration(pos);
+    let (max_min, max_sec) = split_duration(m.duration.unwrap_or_default());
+    let progress = format!(
+        "**Current Time:** {}:{:02} / {}:{:02}",
+        curr_min, curr_sec, max_min, max_sec
+    );
 
-        e.description(format!("**Up Next:** {} by {}", title2, artist2));
-    }
+    let up_next = m2
+        .map(|m2| format!("**Up Next:** {} by {}", get_title(m2), get_artist(m2)))
+        .unwrap_or_default();
 
+    e.description(&[progress, up_next].join("\n"));
     e.timestamp(&chrono::Utc::now());
 
     e
@@ -125,7 +139,7 @@ fn get_artist(m: &Metadata) -> &str {
         .unwrap_or("Unknown Artist")
 }
 
-fn string_or_default<'a>(s: &'a str, d: &'a str) -> &'a str {
+const fn string_or_default<'a>(s: &'a str, d: &'a str) -> &'a str {
     if s.is_empty() {
         d
     } else {
