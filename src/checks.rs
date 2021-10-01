@@ -1,14 +1,15 @@
 use serenity::{
     client::Context,
     framework::standard::{macros::check, Args, CommandOptions, Reason},
-    model::channel::Message,
+    model::prelude::*,
     prelude::Mentionable,
 };
+
+use crate::utils::SunnyError;
 
 #[check]
 #[name = "In_Voice"]
 #[display_in_help]
-#[check_in_help]
 // Ensures a command is only usable if in the same voice channel as sunny
 pub async fn in_same_voice_check(
     ctx: &Context,
@@ -18,30 +19,30 @@ pub async fn in_same_voice_check(
 ) -> Result<(), Reason> {
     let songbird = songbird::get(ctx)
         .await
-        .ok_or_else(|| Reason::Log("Failed to get songbird".to_string()))?;
+        .ok_or_else(|| SunnyError::log("Failed to get songbird"))?;
 
     let guild_id = msg
         .guild_id
-        .ok_or_else(|| Reason::Log("Guild ID Empty".to_string()))?;
+        .ok_or_else(|| SunnyError::log("Guild ID Empty"))?;
 
     let channel = {
         let songbird_call_m = songbird
             .get(guild_id)
-            .ok_or_else(|| Reason::User("Not currently in a call".to_string()))?;
+            .ok_or_else(|| SunnyError::user("Not currently in a call"))?;
 
         let songbird_call = songbird_call_m.lock().await;
 
         songbird_call
             .current_channel()
-            .ok_or_else(|| Reason::Log("Couldn't find songbird channel".to_string()))?
+            .ok_or_else(|| SunnyError::log("Couldn't find songbird channel"))?
     };
 
-    let name = serenity::model::id::ChannelId(channel.0);
+    let name = ChannelId(channel.0);
 
     let guild = msg
         .guild(&ctx.cache)
         .await
-        .ok_or_else(|| Reason::Log("Couldn't get guild".to_string()))?;
+        .ok_or_else(|| SunnyError::log("Couldn't get guild"))?;
 
     let mut states = guild.voice_states.values();
 
@@ -52,9 +53,9 @@ pub async fn in_same_voice_check(
         })
         .then(|| ())
         .ok_or_else(|| {
-            Reason::User(format!(
-                "I only take requests from users in {}",
-                name.mention()
-            ))
-        })
+            SunnyError::user(
+                format!("I only take requests from users in {}", name.mention()).as_str(),
+            )
+        })?;
+    Ok(())
 }

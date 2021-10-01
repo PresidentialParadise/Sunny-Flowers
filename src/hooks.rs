@@ -1,28 +1,18 @@
 use serenity::{
     client::Context,
-    framework::standard::{macros::hook, CommandError, DispatchError, Reason},
+    framework::standard::{macros::hook, CommandError, DispatchError},
     model::channel::Message,
 };
 
-use crate::utils::check_msg;
-
-async fn handle_reason(ctx: &Context, msg: &Message, at: &str, r: &Reason) {
-    match r {
-        Reason::User(user) => check_msg(msg.reply(&ctx.http, user).await),
-        Reason::Log(log) => eprintln!("{}", log),
-        Reason::UserAndLog { user, log } => {
-            check_msg(msg.reply(&ctx.http, user).await);
-            eprintln!("{}", log);
-        }
-        _ => println!("Unknown reason in {}: {:?}", at, r),
-    }
-}
+use crate::utils::SunnyError;
 
 #[hook]
 pub async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError) {
     match error {
-        DispatchError::CheckFailed(check, reason) => handle_reason(ctx, msg, check, &reason).await,
-        _ => println!("Unknown dispatch error: {:?}", &error),
+        DispatchError::CheckFailed(check, reason) => {
+            SunnyError::from(reason).unpack(ctx, msg, check).await;
+        }
+        _ => eprintln!("Unknown dispatch error: {:?}", &error),
     }
 }
 
@@ -33,12 +23,12 @@ pub async fn after_hook(
     cmd_name: &str,
     error: Result<(), CommandError>,
 ) {
-    //  Print out an error if it happened
+    // Print out an error if it happened
     if let Err(why) = error {
-        if let Some(reason) = why.downcast_ref::<Box<Reason>>() {
-            handle_reason(ctx, msg, cmd_name, reason).await;
+        if let Some(reason) = why.downcast_ref::<SunnyError>() {
+            reason.unpack(ctx, msg, cmd_name).await;
         } else {
-            println!("Unknown Error in {}: {:?}", cmd_name, why);
+            eprintln!("Unknown Error in {}: {}", cmd_name, why);
         }
     }
 }

@@ -1409,6 +1409,7 @@ dependencies = [
  "serenity",
  "songbird",
  "tokio",
+ "url",
 ]
 
 [[package]]
