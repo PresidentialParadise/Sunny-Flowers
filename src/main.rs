@@ -22,8 +22,7 @@ use serenity::{
 use tokio::select;
 
 use songbird::SerenityInit;
-use tokio::signal::unix::signal;
-use tokio::signal::unix::SignalKind;
+use tokio::signal::unix::{signal, SignalKind};
 
 #[group]
 #[commands(join, leave, play, ping, skip, stop, now_playing, queue)]
@@ -41,14 +40,14 @@ async fn main() {
         .parse()
         .expect("APP_ID needs to be a number");
 
-    let mut stream = signal(SignalKind::terminate()).unwrap();
+    let mut sigterm = signal(SignalKind::terminate()).unwrap();
 
     let mut client = init_bot(token, app_id).await;
     let shard_manager = client.shard_manager.clone();
 
     select! {
         res = client.start() => match res {
-            Err(e) => eprintln!("Client had a fuckywucky OwO Penultimo is wowking hawd to fricks it uwu O_o {}", e),
+            Err(e) => eprintln!("Client encountered an unexpected error: {}", e),
             _ => unreachable!()
         },
         res = tokio::signal::ctrl_c() => match res {
@@ -58,7 +57,7 @@ async fn main() {
             },
             Err(e) => eprintln!("Unable to listen for shutdown signal {}", e)
         },
-        _ = stream.recv() => {
+        _ = sigterm.recv() => {
             println!("Received SIGTERM, shutting down.");
             shard_manager.lock().await.shutdown_all().await;
         },
@@ -67,7 +66,7 @@ async fn main() {
 
 pub async fn init_bot(token: String, app_id: u64) -> Client {
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("?"))
+        .configure(|c| c.prefix("!"))
         .group(&GENERAL_GROUP)
         .help(&HELP)
         .on_dispatch_error(dispatch_error_hook)

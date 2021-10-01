@@ -225,7 +225,7 @@ pub async fn send_now_playing_embed(
     let position = current
         .get_info()
         .await
-        .map_err(|e| Box::new(Reason::Log(format!("a: {:?}", e))))? // * hackers on diefstal e(stradiol)n he
+        .map_err(|e| Box::new(Reason::Log(format!("a: {:?}", e))))? // * hackers on diefstal e(stradiol)n heling
         .position;
 
     let next_metadata = next.map(|t| t.metadata().clone());
@@ -259,6 +259,7 @@ pub async fn send_now_playing_embed(
 
                 m.edit(&c.http, |e| e.set_embed(embed)).await.ok();
             } else {
+                m.delete(&c.http).await.ok();
                 break;
             }
         }
