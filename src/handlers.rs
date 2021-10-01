@@ -1,13 +1,11 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serenity::{async_trait, futures::future::OptionFuture};
-
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+use serenity::{async_trait, model::prelude::*, prelude::*};
 
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
 
-use crate::utils::{check_msg, generate_embed};
+use crate::commands::send_now_playing_embed;
+use crate::utils::check_msg;
 
 pub struct Handler;
 
@@ -67,33 +65,11 @@ pub struct TrackPlayNotifier {
 #[async_trait]
 impl VoiceEventHandler for TrackPlayNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
-        if let EventContext::Track(track_list) = ctx {
-            let songbird = songbird::get(&self.ctx)
-                .await
-                .expect("Songbird voice client placed in at initialisation")
-                .clone();
-
-            if let Some(track) = track_list.first() {
-                let up_next =
-                    OptionFuture::from(songbird.get(self.guild_id).map(|call_m| async move {
-                        call_m
-                            .lock()
-                            .await
-                            .queue()
-                            .current_queue()
-                            .get(1)
-                            .map(|t| t.metadata().clone())
-                    }))
-                    .await
-                    .flatten();
-
-                check_msg(
-                    self.channel_id
-                        .send_message(&self.ctx.http, |m| {
-                            m.set_embed(generate_embed(track.1.metadata(), up_next.as_ref()))
-                        })
-                        .await,
-                );
+        if let EventContext::Track(_track) = ctx {
+            if let Err(diefstal_en_heling) =
+                send_now_playing_embed(&self.ctx, self.channel_id, self.guild_id).await
+            {
+                eprintln!("Kinderen herhaal: {}", diefstal_en_heling);
             }
         }
 

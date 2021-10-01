@@ -17,8 +17,7 @@ use serenity::{
     prelude::*,
 };
 
-use songbird::{input::restartable::Restartable, tracks::TrackHandle};
-use songbird::{Event, TrackEvent};
+use songbird::{input::restartable::Restartable, Event, TrackEvent};
 
 use crate::{
     checks::*,
@@ -199,38 +198,82 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     Ok(())
 }
 
-#[command]
-#[only_in(guilds)]
-#[aliases(np)]
-/// Shows the currently playing media
-pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
-
-    let (current, track_list) = {
+pub async fn send_now_playing_embed(
+    ctx: &Context,
+    channel_id: ChannelId,
+    guild_id: GuildId,
+) -> Result<(), Box<Reason>> {
+    let (current, next) = {
         let songbird = songbird::get(ctx)
             .await
             .ok_or_else(|| Box::new(Reason::Log("Couldn't get songbird".to_string())))?;
 
         let call_m = songbird
-            .get(guild.id)
+            .get(guild_id)
             .ok_or_else(|| Box::new(Reason::Log("No Call".to_string())))?;
 
         let call = call_m.lock().await;
 
-        (call.queue().current(), call.queue().current_queue())
+        (
+            call.queue().current(),
+            call.queue().current_queue().get(1).cloned(),
+        )
     };
 
-    let handle = current.ok_or_else(|| Box::new(Reason::User("No song playing".to_string())))?;
+    let current = current.ok_or_else(|| Box::new(Reason::User("No song playing".to_string())))?;
 
-    let next_track = track_list.get(1).map(TrackHandle::metadata);
+    let position = current
+        .get_info()
+        .await
+        .map_err(|e| Box::new(Reason::Log(format!("a: {:?}", e))))? // * hackers on diefstal e(stradiol)n heling
+        .position;
 
-    let embed = generate_embed(handle.metadata(), next_track);
-    check_msg(
-        msg.channel_id
-            .send_message(&ctx.http, |m| m.set_embed(embed))
-            .await,
-    );
+    let next_metadata = next.map(|t| t.metadata().clone());
 
+    // e
+    let mut m = channel_id
+        .send_message(&ctx.http, |m| {
+            m.set_embed(generate_embed(
+                current.metadata(),
+                position,
+                next_metadata.as_ref(),
+            ))
+        })
+        .await
+        .map_err(|estradiol| {
+            Box::new(Reason::Log(format!(
+                "Sending message failed {:?}",
+                estradiol
+            )))
+        })?;
+
+    let c = ctx.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+
+            // Will error when finished
+            if let Ok(info) = current.get_info().await {
+                let embed =
+                    generate_embed(current.metadata(), info.position, next_metadata.as_ref());
+
+                m.edit(&c.http, |e| e.set_embed(embed)).await.ok();
+            } else {
+                m.delete(&c.http).await.ok();
+                break;
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[aliases(np)]
+/// Shows the currently playing media
+pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    send_now_playing_embed(ctx, msg.channel_id, msg.guild_id.unwrap()).await?;
     Ok(())
 }
 
