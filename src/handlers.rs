@@ -39,12 +39,11 @@ impl EventHandler for Handler {
 
         // If our new state doesn't have a voice channel i.e. if we have been forcefully disconnected
         if voice_state.channel_id.is_none() {
-
             let guild_id = if let Some(i) = voice_state.guild_id {
                 i
             } else {
                 eprintln!("message guild id could not be found");
-                return
+                return;
             };
 
             effects::leave(&ctx, guild_id).await.emit();

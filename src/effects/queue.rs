@@ -165,11 +165,7 @@ pub async fn send_embed(
     await_interactions(ctx, message, guild_id).await
 }
 
-async fn await_interactions(
-    ctx: &Context,
-    mut msg: Message,
-    guild_id: GuildId,
-) -> SunnyResult<()> {
+async fn await_interactions(ctx: &Context, mut msg: Message, guild_id: GuildId) -> SunnyResult<()> {
     // Currently shown page
     let mut page: usize = 0;
 
@@ -209,19 +205,19 @@ async fn await_interactions(
         })?;
     }
 
-    let guild_id = msg.guild_id
+    let guild_id = msg
+        .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
     let cq = get_queue(ctx, guild_id).await?;
 
     // Remove buttons after timeout
-    msg
-        .edit(&ctx.http, |e| {
-            e.components(|c| c);
-            e.set_embed(generate_embed(&cq, page))
-        })
-        .await
-        .map_err(|e| SunnyError::log(format!("Unable clear buttons {:?}", e).as_str()))?;
+    msg.edit(&ctx.http, |e| {
+        e.components(|c| c);
+        e.set_embed(generate_embed(&cq, page))
+    })
+    .await
+    .map_err(|e| SunnyError::log(format!("Unable clear buttons {:?}", e).as_str()))?;
 
     Ok(())
 }
