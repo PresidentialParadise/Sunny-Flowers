@@ -22,34 +22,6 @@ impl EventHandler for Handler {
 
         ctx.set_presence(Some(activity), status).await;
     }
-
-    async fn voice_state_update(
-        &self,
-        ctx: Context,
-        _: Option<GuildId>,
-        _: Option<VoiceState>,
-        voice_state: VoiceState,
-    ) {
-        let current_user_id = ctx.cache.current_user_id().await;
-
-        // If the state update does not concern us: ignore
-        if voice_state.user_id != current_user_id {
-            return;
-        }
-
-        // If our new state doesn't have a voice channel i.e. if we have been forcefully disconnected
-        if voice_state.channel_id.is_none() {
-            let guild_id = if let Some(i) = voice_state.guild_id {
-                i
-            } else {
-                eprintln!("message guild id could not be found");
-                return;
-            };
-
-            effects::leave(&ctx, guild_id).await.emit();
-            println!("left succesfully after force disconnect");
-        }
-    }
 }
 
 pub struct TrackPlayNotifier {
