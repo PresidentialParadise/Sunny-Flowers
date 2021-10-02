@@ -22,25 +22,25 @@ use songbird::input::Metadata;
 use std::time::Duration;
 
 /// `split_duration` splits a [`Duration`] into a (minutes, seconds) tuple
-pub const fn split_duration(d: Duration) -> (u64, u64) {
+const fn split_duration(d: Duration) -> (u64, u64) {
     (d.as_secs() / 60, d.as_secs() % 60)
 }
 
-pub fn get_title(m: &Metadata) -> &str {
+fn get_title(m: &Metadata) -> &str {
     m.track
         .as_deref()
         .or_else(|| m.title.as_deref())
         .unwrap_or("Unknown Title")
 }
 
-pub fn get_artist(m: &Metadata) -> &str {
+fn get_artist(m: &Metadata) -> &str {
     m.artist
         .as_deref()
         .or_else(|| m.channel.as_deref())
         .unwrap_or("Unknown Artist")
 }
 
-pub const fn string_or_default<'a>(s: &'a str, d: &'a str) -> &'a str {
+const fn string_or_default<'a>(s: &'a str, d: &'a str) -> &'a str {
     if s.is_empty() {
         d
     } else {
