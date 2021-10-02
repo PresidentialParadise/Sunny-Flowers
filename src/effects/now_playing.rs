@@ -105,23 +105,20 @@ pub async fn send_embed(
         })?;
 
     let c = ctx.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(10)).await;
+    loop {
+        tokio::time::sleep(Duration::from_secs(10)).await;
 
-            // Will error when finished
-            if let Ok(info) = current.get_info().await {
-                let embed =
-                    generate_embed(current.metadata(), info.position, next_metadata.as_ref());
+        // Will error when finished
+        if let Ok(info) = current.get_info().await {
+            let embed = generate_embed(current.metadata(), info.position, next_metadata.as_ref());
 
-                m.edit(&c.http, |e| e.set_embed(embed)).await.ok();
-            } else {
-                #[cfg_attr(not(feature = "url/cache"), allow(clippy::unwrap_used))]
-                m.delete(&c.http).await.unwrap();
-                break;
-            }
+            m.edit(&c.http, |e| e.set_embed(embed)).await.ok();
+        } else {
+            #[cfg_attr(not(feature = "url/cache"), allow(clippy::unwrap_used))]
+            m.delete(&c.http).await.unwrap();
+            break;
         }
-    });
+    }
 
     Ok(())
 }

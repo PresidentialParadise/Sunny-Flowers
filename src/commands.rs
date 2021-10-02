@@ -128,6 +128,9 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
     now_playing::send_embed(ctx, guild_id, msg.channel_id).await?;
+
+    msg.delete(&ctx.http).await?;
+
     Ok(())
 }
 
