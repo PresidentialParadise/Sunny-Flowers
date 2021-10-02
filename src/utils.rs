@@ -85,7 +85,7 @@ where
 {
     fn emit(self) {
         if let Err(e) = self {
-            eprintln!("Encountered Error: {}", e);
+            eprintln!("Emit Error: {}", e);
         }
     }
 }

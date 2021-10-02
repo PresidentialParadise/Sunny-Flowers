@@ -78,7 +78,7 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 
     effects::leave(ctx, guild.id).await?;
 
-    msg.channel_id.say(&ctx.http, "Left voice").await?;
+    msg.reply(&ctx.http, "Left voice").await?;
 
     Ok(())
 }
@@ -111,8 +111,7 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
     let len = effects::play(ctx, guild_id, url).await?;
 
-    msg.channel_id
-        .say(&ctx.http, format!("Added song to queue: position {}", len))
+    msg.reply(&ctx.http, format!("Added song to queue: position {}", len))
         .await?;
 
     Ok(())
@@ -137,6 +136,36 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
 #[command]
 #[only_in(guilds)]
 #[checks(In_Voice)]
+pub async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    effects::pause(ctx, guild_id).await?;
+
+    msg.reply(&ctx.http, "Track paused").await?;
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[checks(In_Voice)]
+pub async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    effects::resume(ctx, guild_id).await?;
+
+    msg.reply(&ctx.http, "Track resumed").await?;
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[checks(In_Voice)]
 /// Skips the currently playing song and moves to the next song in the queue.
 pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild_id = msg
@@ -145,15 +174,14 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
     let len = effects::skip(ctx, guild_id).await?;
 
-    msg.channel_id
-        .say(
-            &ctx.http,
-            format!(
-                "Song skipped: {} in queue.",
-                len.checked_sub(1).unwrap_or_default()
-            ),
-        )
-        .await?;
+    msg.reply(
+        &ctx.http,
+        format!(
+            "Song skipped: {} in queue.",
+            len.checked_sub(1).unwrap_or_default()
+        ),
+    )
+    .await?;
     Ok(())
 }
 
@@ -168,7 +196,7 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 
     effects::stop(ctx, guild_id).await?;
 
-    msg.channel_id.say(&ctx.http, "Queue cleared.").await?;
+    msg.reply(&ctx.http, "Queue cleared.").await?;
 
     Ok(())
 }

@@ -6,15 +6,19 @@ mod deafen;
 mod join;
 mod leave;
 pub mod now_playing;
+mod pause;
 mod play;
 pub mod queue;
+mod resume;
 mod skip;
 mod stop;
 
 pub use deafen::deafen;
 pub use join::join;
 pub use leave::leave;
+pub use pause::pause;
 pub use play::play;
+pub use resume::resume;
 pub use skip::skip;
 pub use stop::stop;
 
