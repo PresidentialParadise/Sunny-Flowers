@@ -31,6 +31,7 @@ pub async fn help(
 ) -> CommandResult {
     help_commands::with_embeds(ctx, msg, args, help_options, groups, owners)
         .await
+        .ok_or("failed to send")
         .emit();
     Ok(())
 }
@@ -39,7 +40,10 @@ pub async fn help(
 #[only_in(guilds)]
 /// Adds Sunny to the user's current voice channel.
 pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache)
+        .await
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
     let voice_channel_id = guild
         .voice_states
         .get(&msg.author.id)
@@ -102,7 +106,8 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         return Err(SunnyError::user("Must provide a valid URL").into());
     }
 
-    let guild_id = msg.guild_id.unwrap();
+    let guild_id = msg.guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
     let len = effects::play(ctx, guild_id, url).await?;
 
@@ -118,7 +123,10 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 #[aliases(np)]
 /// Shows the currently playing media
 pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    now_playing::send_embed(ctx, msg.guild_id.unwrap(), msg.channel_id).await?;
+    let guild_id = msg.guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    now_playing::send_embed(ctx, guild_id, msg.channel_id).await?;
     Ok(())
 }
 
@@ -127,7 +135,8 @@ pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandRe
 #[checks(In_Voice)]
 /// Skips the currently playing song and moves to the next song in the queue.
 pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    let guild_id = msg.guild_id.unwrap();
+    let guild_id = msg.guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
     let len = effects::skip(ctx, guild_id).await?;
 
@@ -148,7 +157,7 @@ pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 #[checks(In_Voice)]
 /// Stops playing the current song and clears the current song queue.
 pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    let guild_id = msg.guild_id.unwrap();
+    let guild_id = msg.guild_id.ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
     effects::stop(ctx, guild_id).await?;
 
@@ -162,7 +171,10 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
 #[aliases(q, queueueueu)]
 /// Shows the current queue
 pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
-    queue::send_embed(ctx, msg.guild_id.unwrap(), msg.channel_id).await?;
+    let guild_id = msg.guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    queue::send_embed(ctx, guild_id, msg.channel_id).await?;
     Ok(())
 }
 

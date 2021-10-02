@@ -1,4 +1,5 @@
 #![allow(clippy::wildcard_imports)]
+#![deny(clippy::unwrap_used)]
 
 mod checks;
 mod commands;
@@ -31,6 +32,8 @@ use tokio::signal::unix::{signal, SignalKind};
 struct General;
 
 #[tokio::main]
+// allow unwrap_unused in main function (so during startup)
+#[allow(clippy::unwrap_used)]
 async fn main() {
     println!("Starting sunny");
     eprintln!("e: Starting sunny");
