@@ -1,9 +1,12 @@
 #![allow(clippy::wildcard_imports)]
+#![deny(clippy::unwrap_used)]
 
 mod checks;
 mod commands;
+mod effects;
 mod handlers;
 mod hooks;
+mod structs;
 mod utils;
 
 use std::env;
@@ -29,6 +32,8 @@ use tokio::signal::unix::{signal, SignalKind};
 struct General;
 
 #[tokio::main]
+// allow unwrap_unused in main function (so during startup)
+#[allow(clippy::unwrap_used)]
 async fn main() {
     println!("Starting sunny");
     eprintln!("e: Starting sunny");
@@ -40,9 +45,11 @@ async fn main() {
         .parse()
         .expect("APP_ID needs to be a number");
 
+    let cmd_prefix = env::var("CMD_PREFIX").expect("Environment variable CMD_PREFIX not found");
+
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
 
-    let mut client = init_bot(token, app_id).await;
+    let mut client = init_bot(token, app_id, cmd_prefix).await;
     let shard_manager = client.shard_manager.clone();
 
     select! {
@@ -64,9 +71,9 @@ async fn main() {
     }
 }
 
-pub async fn init_bot(token: String, app_id: u64) -> Client {
+pub async fn init_bot(token: String, app_id: u64, cmd_prefix: String) -> Client {
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!"))
+        .configure(|c| c.prefix(&cmd_prefix))
         .group(&GENERAL_GROUP)
         .help(&HELP)
         .on_dispatch_error(dispatch_error_hook)

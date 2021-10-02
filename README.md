@@ -5,7 +5,7 @@
 Sunny Flowers is a Discord bot to play media in voice channels. It uses [Serenity] and [Songbird] to accomplish this.
 
 [Serenity]: https://github.com/serenity-rs/serenity
-[Songbird]: https://github.com/serenity-rs/songbird
+[Songbird]: https://github.com/serenity-rs/songbird 
 
 ## Running
 You can run Sunny using `cargo run --release`  
