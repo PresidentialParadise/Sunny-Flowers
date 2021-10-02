@@ -31,8 +31,7 @@ pub async fn help(
 ) -> CommandResult {
     help_commands::with_embeds(ctx, msg, args, help_options, groups, owners)
         .await
-        .ok_or("failed to send")
-        .emit();
+        .ok_or_else(|| SunnyError::log("failed to send"))?;
     Ok(())
 }
 
