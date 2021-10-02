@@ -60,12 +60,9 @@ pub struct TrackPlayNotifier {
 impl VoiceEventHandler for TrackPlayNotifier {
     async fn act(&self, event: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(_track) = event {
-            if let Err(diefstal_en_heling) =
-                now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
-                    .await
-            {
-                eprintln!("Kinderen herhaal: {}", diefstal_en_heling);
-            }
+            now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
+                .await
+                .emit();
         }
 
         None

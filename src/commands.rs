@@ -1,4 +1,3 @@
-use crate::utils::Emitable;
 use std::collections::HashSet;
 
 use serenity::{
