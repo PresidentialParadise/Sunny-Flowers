@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use crate::utils::Emitable;
 
 use serenity::{
     client::Context,
@@ -30,7 +31,7 @@ pub async fn help(
 ) -> CommandResult {
     help_commands::with_embeds(ctx, msg, args, help_options, groups, owners)
         .await
-        .unwrap();
+        .emit();
     Ok(())
 }
 

@@ -1,8 +1,9 @@
 use std::{error::Error, fmt};
 
 use serenity::framework::standard::Reason;
-use serenity::model::prelude::*;
 use serenity::prelude::*;
+use serenity::model::prelude::Message;
+
 
 pub type SunnyResult<T> = Result<T, SunnyError>;
 
