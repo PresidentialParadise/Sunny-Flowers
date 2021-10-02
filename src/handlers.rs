@@ -39,7 +39,13 @@ impl EventHandler for Handler {
 
         // If our new state doesn't have a voice channel i.e. if we have been forcefully disconnected
         if voice_state.channel_id.is_none() {
-            let guild_id = voice_state.guild_id.unwrap();
+            let guild_id = if let Some(i) = voice_state.guild_id {
+                i
+            } else {
+                eprintln!("message guild id could not be found");
+                return;
+            };
+
             effects::leave(&ctx, guild_id).await.emit();
             println!("left succesfully after force disconnect");
         }
@@ -74,7 +80,12 @@ pub struct TimeoutHandler {
 #[async_trait]
 impl VoiceEventHandler for TimeoutHandler {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        let guild = self.cfg.ctx.cache.guild(self.cfg.guild_id).await.unwrap();
+        let guild = if let Some(i) = self.cfg.ctx.cache.guild(self.cfg.guild_id).await {
+            i
+        } else {
+            eprintln!("message guild id could not be found");
+            return None;
+        };
         if check_alone(
             &guild,
             self.cfg.voice_channel_id,

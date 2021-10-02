@@ -116,6 +116,7 @@ pub async fn send_embed(
 
                 m.edit(&c.http, |e| e.set_embed(embed)).await.ok();
             } else {
+                #[cfg_attr(not(feature = "url/cache"), allow(clippy::unwrap_used))]
                 m.delete(&c.http).await.unwrap();
                 break;
             }

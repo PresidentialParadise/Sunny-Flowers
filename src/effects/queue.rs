@@ -165,16 +165,12 @@ pub async fn send_embed(
     await_interactions(ctx, message, guild_id).await
 }
 
-async fn await_interactions(
-    ctx: &Context,
-    mut message: Message,
-    guild_id: GuildId,
-) -> SunnyResult<()> {
+async fn await_interactions(ctx: &Context, mut msg: Message, guild_id: GuildId) -> SunnyResult<()> {
     // Currently shown page
     let mut page: usize = 0;
 
     // await interactions i.e. button presses
-    let mut collector = message
+    let mut collector = msg
         .await_component_interactions(&ctx.shard)
         .timeout(Duration::from_secs(3600)) // 1h
         .await;
@@ -209,16 +205,19 @@ async fn await_interactions(
         })?;
     }
 
-    let cq = get_queue(ctx, message.guild_id.unwrap()).await?;
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    let cq = get_queue(ctx, guild_id).await?;
 
     // Remove buttons after timeout
-    message
-        .edit(&ctx.http, |e| {
-            e.components(|c| c);
-            e.set_embed(generate_embed(&cq, page))
-        })
-        .await
-        .map_err(|e| SunnyError::log(format!("Unable clear buttons {:?}", e).as_str()))?;
+    msg.edit(&ctx.http, |e| {
+        e.components(|c| c);
+        e.set_embed(generate_embed(&cq, page))
+    })
+    .await
+    .map_err(|e| SunnyError::log(format!("Unable clear buttons {:?}", e).as_str()))?;
 
     Ok(())
 }
