@@ -27,10 +27,10 @@ fn generate_embed(queue: &[TrackHandle], page: usize) -> serenity::builder::Crea
         a + b.metadata().duration.unwrap_or_default()
     });
 
-    for (i, track) in queue.iter().enumerate().skip(page * 10).take(10) {
+    for (i, track) in queue.iter().enumerate().skip(1 + page * 10).take(10) {
         let m = track.metadata();
 
-        let title = format!("**{}.** {}\n", i + 1, get_title(m));
+        let title = format!("**{}.** {}\n", i, get_title(m));
         titles.push(title);
 
         let artist = format!("{}\n", get_artist(m));
@@ -46,11 +46,11 @@ fn generate_embed(queue: &[TrackHandle], page: usize) -> serenity::builder::Crea
     let mut e = serenity::builder::CreateEmbed::default();
     e.author(|a| a.name("Queueueueueu"));
 
-    if let Some(track) = queue.get(1) {
+    if let Some(track) = queue.first() {
         let m = track.metadata();
 
         e.description(format!(
-            "**Up Next:** {} by {}",
+            "**Now Playing:** {} by {}",
             get_title(m),
             get_artist(m)
         ));
