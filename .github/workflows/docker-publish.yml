@@ -13,7 +13,7 @@ env:
   IMAGE_NAME: library/sunny-flowers
 
 jobs:
-  deploy:
+  publish:
     if: github.event.base_ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
