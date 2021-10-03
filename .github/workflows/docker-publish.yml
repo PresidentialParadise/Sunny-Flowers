@@ -3,7 +3,9 @@ name: Docker
 # GHA Workflow for building and publishing the docker container with layer caching
 # It is based on this helpful article: https://evilmartians.com/chronicles/build-images-on-github-actions-with-docker-layer-caching
 
-on: release
+on:
+  push:
+    tags: [ '*' ]
 env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: registry.xirion.net
