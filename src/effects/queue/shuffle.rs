@@ -15,7 +15,7 @@ where
         // invariant: elements with index >= i have been locked in place.
         i -= 1;
         // lock element i in place.
-        values.swap(i, rng.gen_range(1..=1));
+        values.swap(i, rng.gen_range(1..=i));
     }
 }
 

@@ -13,7 +13,7 @@ pub async fn swap(
 ) -> SunnyResult<(TrackHandle, TrackHandle)> {
     // What's this, a precondition, in my code!?
     if a == 0 || b == 0 {
-        return Err(SunnyError::user("no"));
+        return Err(SunnyError::user("A song index of 0 is invalid (The queue starts at 1)"));
     }
 
     let call_m = songbird::get(ctx)
@@ -27,7 +27,7 @@ pub async fn swap(
     let q = call.queue();
 
     if cmp::max(a, b) >= q.len() {
-        return Err(SunnyError::user("no"));
+        return Err(SunnyError::user("Can't swap non-existing index"));
     }
 
     let (t1, t2) = q.modify_queue(|q| {

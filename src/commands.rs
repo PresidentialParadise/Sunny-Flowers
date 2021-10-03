@@ -117,7 +117,7 @@ pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let len = queue::play(ctx, guild_id, url, EnqueueAt::Back).await?;
 
     let reply = if len == 1 {
-        "I gotchu fam".to_string()
+        "Started playing the song".to_string()
     } else {
         format!("Added song to queue: position {}", len - 1)
     };
@@ -167,6 +167,9 @@ pub async fn shuffle(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 #[min_args(2)]
 #[max_args(2)]
+#[usage("<position> <position>")]
+#[example("4 2")]
+/// Swaps two songs in the queue by their number
 pub async fn swap(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild_id = msg
         .guild_id
@@ -214,6 +217,7 @@ pub async fn now_playing(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 #[checks(In_Voice)]
+/// Pauses the currently playing
 pub async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg
         .guild_id
@@ -229,6 +233,7 @@ pub async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 #[checks(In_Voice)]
+/// Resumes the current song if it was paused
 pub async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg
         .guild_id
@@ -244,7 +249,7 @@ pub async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 #[checks(In_Voice)]
-/// Skips the currently playing song and moves to the next song in the queue.
+/// Skips the currently playing song and starts the next song in the queue.
 pub async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg
         .guild_id
@@ -296,7 +301,9 @@ pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 #[aliases(r, remove)]
 #[max_args(1)]
-/// Shows the current queue
+#[example("2")]
+#[usage("<position>")]
+/// Removes a song from the queue by its position
 pub async fn remove_at(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild_id = msg
         .guild_id
