@@ -5,7 +5,6 @@ name: Docker
 
 on:
   push:
-    branches: [ dev ]
     tags: [ '*' ]
 env:
   # Use docker.io for Docker Hub if empty
@@ -14,8 +13,8 @@ env:
   IMAGE_NAME: library/sunny-flowers
 
 jobs:
-  build:
-
+  deploy:
+    if: github.event.base_ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
       contents: read
