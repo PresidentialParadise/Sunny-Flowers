@@ -28,7 +28,22 @@ use songbird::SerenityInit;
 use tokio::signal::unix::{signal, SignalKind};
 
 #[group]
-#[commands(join, leave, pause, play, ping, resume, skip, stop, now_playing, queue)]
+#[commands(
+    join,
+    leave,
+    pause,
+    play,
+    play_next,
+    ping,
+    resume,
+    remove_at,
+    shuffle,
+    skip,
+    stop,
+    swap,
+    now_playing,
+    queue
+)]
 struct General;
 
 #[tokio::main]

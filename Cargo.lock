@@ -1406,6 +1406,7 @@ version = "0.13.0"
 dependencies = [
  "chrono",
  "dotenv",
+ "rand 0.8.4",
  "serenity",
  "songbird",
  "tokio",

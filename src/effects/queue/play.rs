@@ -3,7 +3,17 @@ use songbird::input::Restartable;
 
 use crate::utils::{SunnyError, SunnyResult};
 
-pub async fn play(ctx: &Context, guild_id: GuildId, url: String) -> SunnyResult<usize> {
+pub enum EnqueueAt {
+    Front,
+    Back,
+}
+
+pub async fn play(
+    ctx: &Context,
+    guild_id: GuildId,
+    url: String,
+    enqueu_at: EnqueueAt,
+) -> SunnyResult<usize> {
     let source = Restartable::ytdl(url, true).await.map_err(|e| {
         SunnyError::user_and_log(
             "Error starting stream",
@@ -21,6 +31,19 @@ pub async fn play(ctx: &Context, guild_id: GuildId, url: String) -> SunnyResult<
 
     let mut call = call_m.lock().await;
 
-    call.enqueue_source(source.into());
+    match enqueu_at {
+        EnqueueAt::Front => {
+            call.enqueue_source(source.into());
+            call.queue().modify_queue(|q| {
+                if let Some(track) = q.pop_back() {
+                    q.push_front(track);
+                    if q.len() > 1 {
+                        q.swap(0, 1);
+                    }
+                }
+            });
+        }
+        EnqueueAt::Back => call.enqueue_source(source.into()),
+    };
     Ok(call.queue().len())
 }

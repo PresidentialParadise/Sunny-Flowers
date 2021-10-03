@@ -3,24 +3,15 @@
 //!
 
 mod deafen;
+pub mod display_queue;
 mod join;
 mod leave;
 pub mod now_playing;
-mod pause;
-mod play;
 pub mod queue;
-mod resume;
-mod skip;
-mod stop;
 
 pub use deafen::deafen;
 pub use join::join;
 pub use leave::leave;
-pub use pause::pause;
-pub use play::play;
-pub use resume::resume;
-pub use skip::skip;
-pub use stop::stop;
 
 use songbird::input::Metadata;
 use std::time::Duration;
@@ -42,6 +33,10 @@ fn get_artist(m: &Metadata) -> &str {
         .as_deref()
         .or_else(|| m.channel.as_deref())
         .unwrap_or("Unknown Artist")
+}
+
+pub fn get_song(m: &Metadata) -> String {
+    format!("{} by {}", get_title(m), get_artist(m))
 }
 
 const fn string_or_default<'a>(s: &'a str, d: &'a str) -> &'a str {

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, num::NonZeroUsize};
 
 use serenity::{
     client::Context,
@@ -14,7 +14,10 @@ use url::Url;
 
 use crate::{
     checks::*,
-    effects::{self, now_playing, queue},
+    effects::{
+        self, display_queue, now_playing,
+        queue::{self, EnqueueAt},
+    },
     structs::EventConfig,
     utils::SunnyError,
 };
@@ -83,6 +86,18 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+fn validate_url(mut args: Args) -> Option<String> {
+    let mut url: String = args.single().ok()?;
+
+    if url.starts_with('<') && url.ends_with('>') {
+        url = url[1..url.len() - 1].to_string();
+    }
+
+    Url::parse(&url).ok()?;
+
+    Some(url)
+}
+
 #[command]
 #[aliases(p)]
 #[max_args(1)]
@@ -92,27 +107,90 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 #[checks(In_Voice)]
 /// While Sunny is in a voice channel, you may run the play command so that she
 /// can start streaming the given video URL.
-pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let mut url: String = args
-        .single()
-        .map_err(|_| SunnyError::user("Must provide a URL to a video or audio"))?;
-
-    if url.starts_with('<') && url.ends_with('>') {
-        url = url[1..url.len() - 1].to_string();
-    }
-
-    if Url::parse(&url).is_err() {
-        return Err(SunnyError::user("Must provide a valid URL").into());
-    }
+pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let url = validate_url(args).ok_or_else(|| SunnyError::user("Wrong url ya dingus"))?;
 
     let guild_id = msg
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
-    let len = effects::play(ctx, guild_id, url).await?;
+    let len = queue::play(ctx, guild_id, url, EnqueueAt::Back).await?;
 
-    msg.reply(&ctx.http, format!("Added song to queue: position {}", len))
-        .await?;
+    let reply = if len == 1 {
+        "I gotchu fam".to_string()
+    } else {
+        format!("Added song to queue: position {}", len - 1)
+    };
+
+    msg.reply(&ctx.http, reply).await?;
+
+    Ok(())
+}
+
+#[command]
+#[aliases(pn)]
+#[max_args(1)]
+#[only_in(guilds)]
+#[usage("<url>")]
+#[example("https://www.youtube.com/watch?v=dQw4w9WgXcQ")]
+#[checks(In_Voice)]
+/// While Sunny is in a voice channel, you may run the play command so that she
+/// can start streaming the given video URL.
+pub async fn play_next(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let url = validate_url(args).ok_or_else(|| SunnyError::user("Wrong url ya dingus"))?;
+
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    queue::play(ctx, guild_id, url, EnqueueAt::Front).await?;
+
+    msg.reply(&ctx.http, "Added song to front of queue").await?;
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+/// Shuffles your queue badly
+pub async fn shuffle(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("Failed to get guild id"))?;
+
+    queue::shuffle(ctx, guild_id).await?;
+    msg.reply(&ctx.http, "Queue Shuffled :game_die:!").await?;
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[min_args(2)]
+#[max_args(2)]
+pub async fn swap(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("Failed to get guild id"))?;
+
+    let a = args
+        .single::<NonZeroUsize>()
+        .map_err(|_| SunnyError::user("Invalid arguments"))?;
+
+    let b = args
+        .single::<NonZeroUsize>()
+        .map_err(|_| SunnyError::user("Invalid arguments"))?;
+
+    let (t1, t2) = queue::swap(ctx, guild_id, a.into(), b.into()).await?;
+
+    msg.reply(
+        &ctx.http,
+        format!(
+            "Swapped `{}` and `{}`",
+            effects::get_song(t1.metadata()),
+            effects::get_song(t2.metadata())
+        ),
+    )
+    .await?;
 
     Ok(())
 }
@@ -121,7 +199,7 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 #[only_in(guilds)]
 #[aliases(np)]
 /// Shows the currently playing media
-pub async fn now_playing(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+pub async fn now_playing(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
@@ -141,7 +219,7 @@ pub async fn pause(ctx: &Context, msg: &Message) -> CommandResult {
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
-    effects::pause(ctx, guild_id).await?;
+    queue::pause(ctx, guild_id).await?;
 
     msg.reply(&ctx.http, "Track paused").await?;
 
@@ -156,7 +234,7 @@ pub async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
-    effects::resume(ctx, guild_id).await?;
+    queue::resume(ctx, guild_id).await?;
 
     msg.reply(&ctx.http, "Track resumed").await?;
 
@@ -167,12 +245,12 @@ pub async fn resume(ctx: &Context, msg: &Message) -> CommandResult {
 #[only_in(guilds)]
 #[checks(In_Voice)]
 /// Skips the currently playing song and moves to the next song in the queue.
-pub async fn skip(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+pub async fn skip(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
-    let len = effects::skip(ctx, guild_id).await?;
+    let len = queue::skip(ctx, guild_id).await?;
 
     msg.reply(
         &ctx.http,
@@ -194,7 +272,7 @@ pub async fn stop(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
-    effects::stop(ctx, guild_id).await?;
+    queue::stop(ctx, guild_id).await?;
 
     msg.reply(&ctx.http, "Queue cleared.").await?;
 
@@ -210,7 +288,32 @@ pub async fn queue(ctx: &Context, msg: &Message) -> CommandResult {
         .guild_id
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
-    queue::send_embed(ctx, guild_id, msg.channel_id).await?;
+    display_queue::send_embed(ctx, guild_id, msg.channel_id).await?;
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+#[aliases(r, remove)]
+#[max_args(1)]
+/// Shows the current queue
+pub async fn remove_at(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let guild_id = msg
+        .guild_id
+        .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
+
+    #[allow(clippy::unwrap_used)]
+    let index = args
+        .single::<NonZeroUsize>()
+        .unwrap_or_else(|_| NonZeroUsize::new(1).unwrap());
+
+    let q = queue::remove_at(ctx, guild_id, index).await?;
+
+    msg.reply(
+        &ctx.http,
+        format!("Removed: `{}`", effects::get_song(q.metadata())),
+    )
+    .await?;
     Ok(())
 }
 

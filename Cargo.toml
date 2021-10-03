@@ -21,6 +21,7 @@ songbird = { version = "0.2", features = ["builtin-queue"] }
 tokio = { version = "1.11", features = ["macros", "rt-multi-thread", "signal"] }
 chrono = "0.4"
 url = "2"
+rand = {version = "0.8", features = ["small_rng"]}
 
 [profile.release]
 opt-level = 3
