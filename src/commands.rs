@@ -60,11 +60,10 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     })
     .await?;
 
+    effects::deafen(call_m).await;
     msg.channel_id
         .say(&ctx.http, format!("Joined {}", voice_channel_id.mention()))
         .await?;
-
-    effects::deafen(call_m).await;
 
     Ok(())
 }
