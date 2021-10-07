@@ -147,7 +147,7 @@ async fn get_queue(ctx: &Context, guild_id: GuildId) -> SunnyResult<Vec<TrackHan
 }
 
 /// Sends an interactive queue embed and interactions
-#[instrument(skip(ctx), name ="queue_embed")]
+#[instrument(skip(ctx), name = "queue_embed")]
 pub async fn send_embed(
     ctx: &Context,
     guild_id: GuildId,

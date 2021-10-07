@@ -3,10 +3,10 @@ use serenity::{
     framework::standard::{macros::hook, CommandError, DispatchError},
     model::channel::Message,
 };
-use tracing::{span, Instrument, event, Level};
+use tracing::{event, span, Instrument, Level};
 
-use crate::utils::{SunnyError};
 use crate::sunny_log;
+use crate::utils::SunnyError;
 
 #[hook]
 pub async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError) {
@@ -16,9 +16,9 @@ pub async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchEr
             DispatchError::CheckFailed(_check, reason) => {
                 sunny_log!(&SunnyError::from(reason), ctx, msg, Level::WARN);
             }
-            _ => { 
-                event!(Level::ERROR, "Unknown dispatch error: {:?}", error)
-             }
+            _ => {
+                event!(Level::ERROR, "Unknown dispatch error: {:?}", error);
+            }
         }
     }
     .instrument(span)
@@ -43,5 +43,7 @@ pub async fn after_hook(
                 event!(Level::ERROR, "Unknown error in {}: {}", cmd_name, why);
             }
         }
-    }.instrument(span).await
+    }
+    .instrument(span)
+    .await
 }

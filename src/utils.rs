@@ -37,9 +37,9 @@ macro_rules! sunny_log {
         let ctx: &Context = $ctx;
         let msg: &Message = $msg;
         match error {
-             SunnyError::User(user) => emit!(msg.reply(&ctx.http, user).await, $lvl),
-             SunnyError::Log(log) => event!($lvl, ?log),
-             SunnyError::UserAndLog { user, log } => {
+            SunnyError::User(user) => emit!(msg.reply(&ctx.http, user).await, $lvl),
+            SunnyError::Log(log) => event!($lvl, ?log),
+            SunnyError::UserAndLog { user, log } => {
                 emit!(msg.reply(&ctx.http, user).await, $lvl);
                 event!($lvl, ?log);
             }
@@ -79,7 +79,6 @@ impl fmt::Display for SunnyError {
 }
 
 impl Error for SunnyError {}
-
 
 #[macro_export]
 macro_rules! emit {

@@ -26,7 +26,7 @@ use tokio::select;
 
 use songbird::SerenityInit;
 use tokio::signal::unix::{signal, SignalKind};
-use tracing::{Level, event};
+use tracing::{event, Level};
 
 #[group]
 #[commands(

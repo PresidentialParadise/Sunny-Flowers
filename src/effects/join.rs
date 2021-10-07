@@ -23,7 +23,6 @@ async fn add_events(cfg: &EventConfig, call_m: Arc<Mutex<Call>>) {
     let mut call = call_m.lock().await;
     call.remove_all_global_events();
 
-
     call.add_global_event(
         Event::Track(TrackEvent::Play),
         TrackPlayNotifier { cfg: cfg.clone() },

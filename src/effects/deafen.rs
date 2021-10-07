@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use serenity::prelude::Mutex;
 use crate::emit;
-use tracing::{event,Level};
-
+use serenity::prelude::Mutex;
+use tracing::{event, Level};
 
 pub async fn deafen(call_m: Arc<Mutex<songbird::Call>>) {
     let mut call = call_m.lock().await;

@@ -4,7 +4,7 @@ use serenity::{
     model::prelude::*,
     prelude::Mentionable,
 };
-use tracing::{Instrument, Level, span};
+use tracing::{span, Instrument, Level};
 
 use crate::utils::SunnyError;
 
@@ -61,5 +61,7 @@ pub async fn in_same_voice_check(
                 )
             })?;
         Ok(())
-    }.instrument(span).await
+    }
+    .instrument(span)
+    .await
 }

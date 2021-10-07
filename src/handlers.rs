@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serenity::{async_trait, model::prelude::*, prelude::*};
 
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
-use tracing::{event, Level, instrument};
+use tracing::{event, instrument, Level};
 
 use crate::effects::{self, now_playing};
 use crate::emit;
@@ -35,8 +35,9 @@ impl VoiceEventHandler for TrackPlayNotifier {
     #[instrument(name = "track_play_notifier_handler")]
     async fn act(&self, event: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(_track) = event {
-            let res = now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
-                .await;
+            let res =
+                now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
+                    .await;
 
             emit!(res, Level::WARN);
         }
@@ -58,7 +59,7 @@ impl VoiceEventHandler for TimeoutHandler {
         let guild = if let Some(i) = self.cfg.ctx.cache.guild(self.cfg.guild_id).await {
             i
         } else {
-            event!(Level::WARN ,"message guild id could not be found");
+            event!(Level::WARN, "message guild id could not be found");
             return None;
         };
         if check_alone(
@@ -69,12 +70,12 @@ impl VoiceEventHandler for TimeoutHandler {
             let prev = self.timer.fetch_add(1, Ordering::Relaxed);
 
             if prev >= 5 {
-                let res = effects::leave(&self.cfg.ctx, self.cfg.guild_id)
-                    .await;
+                let res = effects::leave(&self.cfg.ctx, self.cfg.guild_id).await;
 
                 emit!(res, Level::WARN);
 
-                let res = self.cfg
+                let res = self
+                    .cfg
                     .text_channel_id
                     .say(&self.cfg.ctx.http, "Left voice due to lack of frens :(((")
                     .await;
