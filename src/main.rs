@@ -51,6 +51,10 @@ struct General;
 // allow unwrap_unused in main function (so during startup)
 #[allow(clippy::unwrap_used)]
 async fn main() {
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(Level::INFO)
+        .init();
+
     event!(Level::INFO, "Starting sunny");
 
     dotenv().ok();
