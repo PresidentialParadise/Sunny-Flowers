@@ -8,6 +8,7 @@ use std::{
 
 use serenity::prelude::Mutex;
 use songbird::{Call, Event, TrackEvent};
+use tracing::instrument;
 
 use crate::{
     handlers::{TimeoutHandler, TrackPlayNotifier},
@@ -17,9 +18,11 @@ use crate::{
 
 static IS_CONNECTING: AtomicBool = AtomicBool::new(false);
 
+#[instrument]
 async fn add_events(cfg: &EventConfig, call_m: Arc<Mutex<Call>>) {
     let mut call = call_m.lock().await;
     call.remove_all_global_events();
+
 
     call.add_global_event(
         Event::Track(TrackEvent::Play),
@@ -35,6 +38,7 @@ async fn add_events(cfg: &EventConfig, call_m: Arc<Mutex<Call>>) {
     );
 }
 
+#[instrument]
 pub async fn join(cfg: &EventConfig) -> SunnyResult<Arc<Mutex<Call>>> {
     let songbird = songbird::get(&cfg.ctx)
         .await

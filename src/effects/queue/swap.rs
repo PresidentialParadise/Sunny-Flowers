@@ -2,9 +2,11 @@ use std::cmp;
 
 use serenity::{client::Context, model::id::GuildId};
 use songbird::tracks::TrackHandle;
+use tracing::instrument;
 
 use crate::utils::{SunnyError, SunnyResult};
 
+#[instrument(skip(ctx))]
 pub async fn swap(
     ctx: &Context,
     guild_id: GuildId,

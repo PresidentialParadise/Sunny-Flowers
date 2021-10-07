@@ -1,13 +1,16 @@
 use serenity::{client::Context, model::id::GuildId};
 use songbird::input::Restartable;
+use tracing::instrument;
 
 use crate::utils::{SunnyError, SunnyResult};
 
+#[derive(Debug)]
 pub enum EnqueueAt {
     Front,
     Back,
 }
 
+#[instrument(skip(ctx))]
 pub async fn play(
     ctx: &Context,
     guild_id: GuildId,

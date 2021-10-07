@@ -5,6 +5,7 @@ use serenity::{
     model::id::{ChannelId, GuildId},
 };
 use songbird::{input::Metadata, tracks::TrackHandle};
+use tracing::instrument;
 
 use crate::utils::{SunnyError, SunnyResult};
 
@@ -52,6 +53,7 @@ pub fn generate_embed(
 }
 
 /// Gets the current and next up song's [`TrackHandle`].
+#[instrument(skip(ctx))]
 async fn get_songs(
     ctx: &Context,
     guild_id: GuildId,
@@ -73,6 +75,7 @@ async fn get_songs(
 }
 
 /// Sends a `now_playing` embed and updates the progress every 10 seconds
+#[instrument(skip(ctx))]
 pub async fn send_embed(
     ctx: &Context,
     guild_id: GuildId,
