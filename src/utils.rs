@@ -31,16 +31,16 @@ impl SunnyError {
 #[macro_export]
 macro_rules! sunny_log {
     ($err:expr, $ctx:expr, $msg:expr, $lvl:expr) => {
-        use crate::utils::Emitable;
+        use crate::emit;
 
         let error: &SunnyError = $err;
         let ctx: &Context = $ctx;
         let msg: &Message = $msg;
         match error {
-             SunnyError::User(user) => msg.reply(&ctx.http, user).await.emit(),
+             SunnyError::User(user) => emit!(msg.reply(&ctx.http, user).await, $lvl),
              SunnyError::Log(log) => event!($lvl, ?log),
              SunnyError::UserAndLog { user, log } => {
-                msg.reply(&ctx.http, user).await.emit();
+                emit!(msg.reply(&ctx.http, user).await, $lvl);
                 event!($lvl, ?log);
             }
         }
@@ -80,17 +80,12 @@ impl fmt::Display for SunnyError {
 
 impl Error for SunnyError {}
 
-pub trait Emitable {
-    fn emit(self);
-}
 
-impl<T, E> Emitable for Result<T, E>
-where
-    E: fmt::Display,
-{
-    fn emit(self) {
-        if let Err(e) = self {
-            eprintln!("Emit Error: {}", e);
+#[macro_export]
+macro_rules! emit {
+    ($res:expr, $lvl:expr) => {
+        if let Err(e) = $res {
+            event!($lvl, %e, "Emit error")
         }
-    }
+    };
 }

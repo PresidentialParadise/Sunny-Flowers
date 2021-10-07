@@ -6,8 +6,8 @@ use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
 use tracing::{event, Level, instrument};
 
 use crate::effects::{self, now_playing};
+use crate::emit;
 use crate::structs::EventConfig;
-use crate::utils::Emitable;
 
 pub struct Handler;
 
@@ -35,9 +35,10 @@ impl VoiceEventHandler for TrackPlayNotifier {
     #[instrument(name = "track_play_notifier_handler")]
     async fn act(&self, event: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(_track) = event {
-            now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
-                .await
-                .emit();
+            let res = now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
+                .await;
+
+            emit!(res, Level::WARN);
         }
 
         None
@@ -68,15 +69,17 @@ impl VoiceEventHandler for TimeoutHandler {
             let prev = self.timer.fetch_add(1, Ordering::Relaxed);
 
             if prev >= 5 {
-                effects::leave(&self.cfg.ctx, self.cfg.guild_id)
-                    .await
-                    .emit();
+                let res = effects::leave(&self.cfg.ctx, self.cfg.guild_id)
+                    .await;
 
-                self.cfg
+                emit!(res, Level::WARN);
+
+                let res = self.cfg
                     .text_channel_id
                     .say(&self.cfg.ctx.http, "Left voice due to lack of frens :(((")
-                    .await
-                    .emit();
+                    .await;
+
+                emit!(res, Level::WARN);
             }
         } else {
             self.timer.store(0, Ordering::Relaxed);
