@@ -17,7 +17,7 @@ pub async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchEr
                 sunny_log!(&SunnyError::from(reason), ctx, msg, Level::WARN);
             }
             _ => {
-                event!(Level::ERROR, "Unknown dispatch error: {:?}", error);
+                event!(Level::ERROR, ?error, "unknown dispatch error");
             }
         }
     }
@@ -40,7 +40,7 @@ pub async fn after_hook(
             if let Some(reason) = why.downcast_ref::<SunnyError>() {
                 sunny_log!(reason, ctx, msg, Level::WARN);
             } else {
-                event!(Level::ERROR, "Unknown error in {}: {}", cmd_name, why);
+                event!(Level::ERROR, %cmd_name, %why, "Unknown error");
             }
         }
     }

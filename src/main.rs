@@ -69,7 +69,7 @@ async fn main() {
 
     select! {
         res = client.start() => match res {
-            Err(e) => event!(Level::ERROR, "Client encountered an unexpected error: {}", e),
+            Err(err) => event!(Level::ERROR, %err, "client encountered an unexpected error"),
             _ => unreachable!()
         },
         res = tokio::signal::ctrl_c() => match res {
@@ -77,7 +77,7 @@ async fn main() {
                 event!(Level::INFO, "Received Ctrl-C, shutting down.");
                 shard_manager.lock().await.shutdown_all().await;
             },
-            Err(e) => event!(Level::ERROR, "Unable to listen for shutdown signal {}", e)
+            Err(e) => event!(Level::ERROR, %e, "unable to listen for shutdown signal")
         },
         _ = sigterm.recv() => {
             event!(Level::INFO, "Received SIGTERM, shutting down.");
