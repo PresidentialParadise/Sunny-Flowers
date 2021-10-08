@@ -1,10 +1,10 @@
-use std::{panic, sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
-    }, time::Duration};
+use std::{
+    sync::{atomic::AtomicUsize, Arc},
+    time::Duration,
+};
 
 use once_cell::sync::Lazy;
-use serenity::{prelude::Mutex};
+use serenity::prelude::Mutex;
 use songbird::{Call, Event, TrackEvent};
 
 use crate::{
@@ -40,9 +40,9 @@ pub async fn join(cfg: &EventConfig) -> SunnyResult<Arc<Mutex<Call>>> {
 
     let guard = IS_CONNECTING.lock().await;
 
-    let (call_m , success) = songbird.join(cfg.guild_id, cfg.voice_channel_id).await;
+    let (call_m, success) = songbird.join(cfg.guild_id, cfg.voice_channel_id).await;
 
-    drop(guard);    
+    drop(guard);
 
     success
         .map_err(|e| SunnyError::user_and_log("Failed to join channel", e.to_string().as_str()))?;
