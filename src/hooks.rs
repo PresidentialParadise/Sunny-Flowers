@@ -10,7 +10,7 @@ use crate::utils::SunnyError;
 
 #[hook]
 pub async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError) {
-    let span = span!(Level::WARN, "dispatch_error_hook", ?msg, ?error);
+    let span = span!(Level::WARN, "dispatch_error_hook", %msg.content, ?error);
     async move {
         match error {
             DispatchError::CheckFailed(_check, reason) => {
@@ -32,7 +32,7 @@ pub async fn after_hook(
     cmd_name: &str,
     error: Result<(), CommandError>,
 ) {
-    let span = span!(Level::WARN, "after_hook", ?msg, ?cmd_name);
+    let span = span!(Level::WARN, "after_hook", %msg.content, ?cmd_name);
 
     async move {
         // Print out an error if it happened
