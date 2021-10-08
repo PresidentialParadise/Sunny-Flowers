@@ -1,8 +1,6 @@
 use std::{error::Error, fmt};
 
 use serenity::framework::standard::Reason;
-use serenity::model::prelude::Message;
-use serenity::prelude::*;
 
 pub type SunnyResult<T> = Result<T, SunnyError>;
 
@@ -28,18 +26,25 @@ impl SunnyError {
             log: log.to_string(),
         }
     }
+}
 
-    /// Unpacks and 'handles' the error appropiately
-    pub async fn unpack(&self, ctx: &Context, msg: &Message, at: &str) {
-        match self {
-            Self::User(user) => msg.reply(&ctx.http, user).await.emit(),
-            Self::Log(log) => eprintln!("{} errored {}", at, log),
-            Self::UserAndLog { user, log } => {
-                msg.reply(&ctx.http, user).await.emit();
-                eprintln!("{} errored {}", at, log);
+#[macro_export]
+macro_rules! sunny_log {
+    ($err:expr, $ctx:expr, $msg:expr, $lvl:expr) => {
+        use crate::emit;
+
+        let error: &SunnyError = $err;
+        let ctx: &Context = $ctx;
+        let msg: &Message = $msg;
+        match error {
+            SunnyError::User(user) => emit!(msg.reply(&ctx.http, user).await, $lvl),
+            SunnyError::Log(log) => event!($lvl, ?log),
+            SunnyError::UserAndLog { user, log } => {
+                emit!(msg.reply(&ctx.http, user).await, $lvl);
+                event!($lvl, ?log);
             }
         }
-    }
+    };
 }
 
 impl From<Reason> for SunnyError {
@@ -75,17 +80,11 @@ impl fmt::Display for SunnyError {
 
 impl Error for SunnyError {}
 
-pub trait Emitable {
-    fn emit(self);
-}
-
-impl<T, E> Emitable for Result<T, E>
-where
-    E: fmt::Display,
-{
-    fn emit(self) {
-        if let Err(e) = self {
-            eprintln!("Emit Error: {}", e);
+#[macro_export]
+macro_rules! emit {
+    ($res:expr, $lvl:expr) => {
+        if let Err(e) = $res {
+            event!($lvl, %e, "Emit error")
         }
-    }
+    };
 }

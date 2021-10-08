@@ -26,6 +26,7 @@ use tokio::select;
 
 use songbird::SerenityInit;
 use tokio::signal::unix::{signal, SignalKind};
+use tracing::{event, Level};
 
 #[group]
 #[commands(
@@ -50,8 +51,11 @@ struct General;
 // allow unwrap_unused in main function (so during startup)
 #[allow(clippy::unwrap_used)]
 async fn main() {
-    println!("Starting sunny");
-    eprintln!("e: Starting sunny");
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(Level::INFO)
+        .init();
+
+    event!(Level::INFO, "Starting sunny");
 
     dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("Environment variable DISCORD_TOKEN not found");
@@ -69,18 +73,18 @@ async fn main() {
 
     select! {
         res = client.start() => match res {
-            Err(e) => eprintln!("Client encountered an unexpected error: {}", e),
+            Err(err) => event!(Level::ERROR, %err, "client encountered an unexpected error"),
             _ => unreachable!()
         },
         res = tokio::signal::ctrl_c() => match res {
             Ok(()) => {
-                println!("Received Ctrl-C, shutting down.");
+                event!(Level::INFO, "Received Ctrl-C, shutting down.");
                 shard_manager.lock().await.shutdown_all().await;
             },
-            Err(e) => eprintln!("Unable to listen for shutdown signal {}", e)
+            Err(e) => event!(Level::ERROR, %e, "unable to listen for shutdown signal")
         },
         _ = sigterm.recv() => {
-            println!("Received SIGTERM, shutting down.");
+            event!(Level::INFO, "Received SIGTERM, shutting down.");
             shard_manager.lock().await.shutdown_all().await;
         },
     }

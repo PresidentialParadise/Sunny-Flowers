@@ -3,17 +3,26 @@ use serenity::{
     framework::standard::{macros::hook, CommandError, DispatchError},
     model::channel::Message,
 };
+use tracing::{event, span, Instrument, Level};
 
+use crate::sunny_log;
 use crate::utils::SunnyError;
 
 #[hook]
 pub async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError) {
-    match error {
-        DispatchError::CheckFailed(check, reason) => {
-            SunnyError::from(reason).unpack(ctx, msg, check).await;
+    let span = span!(Level::WARN, "dispatch_error_hook", %msg.content, ?error);
+    async move {
+        match error {
+            DispatchError::CheckFailed(_check, reason) => {
+                sunny_log!(&SunnyError::from(reason), ctx, msg, Level::WARN);
+            }
+            _ => {
+                event!(Level::ERROR, ?error, "unknown dispatch error");
+            }
         }
-        _ => eprintln!("Unknown dispatch error: {:?}", &error),
     }
+    .instrument(span)
+    .await
 }
 
 #[hook]
@@ -23,12 +32,18 @@ pub async fn after_hook(
     cmd_name: &str,
     error: Result<(), CommandError>,
 ) {
-    // Print out an error if it happened
-    if let Err(why) = error {
-        if let Some(reason) = why.downcast_ref::<SunnyError>() {
-            reason.unpack(ctx, msg, cmd_name).await;
-        } else {
-            eprintln!("Unknown Error in {}: {}", cmd_name, why);
+    let span = span!(Level::WARN, "after_hook", %msg.content, ?cmd_name);
+
+    async move {
+        // Print out an error if it happened
+        if let Err(why) = error {
+            if let Some(reason) = why.downcast_ref::<SunnyError>() {
+                sunny_log!(reason, ctx, msg, Level::WARN);
+            } else {
+                event!(Level::ERROR, %cmd_name, %why, "Unknown error");
+            }
         }
     }
+    .instrument(span)
+    .await
 }

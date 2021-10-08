@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use rand::{rngs::SmallRng, SeedableRng};
 use serenity::{client::Context, model::id::GuildId};
+use tracing::instrument;
 
 use crate::utils::{SunnyError, SunnyResult};
 
@@ -19,6 +20,7 @@ where
     }
 }
 
+#[instrument(skip(ctx))]
 pub async fn shuffle(ctx: &Context, guild_id: GuildId) -> SunnyResult<()> {
     songbird::get(ctx)
         .await

@@ -3,10 +3,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serenity::{async_trait, model::prelude::*, prelude::*};
 
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler};
+use tracing::{event, instrument, Level};
 
 use crate::effects::{self, now_playing};
+use crate::emit;
 use crate::structs::EventConfig;
-use crate::utils::Emitable;
 
 pub struct Handler;
 
@@ -24,23 +25,28 @@ impl EventHandler for Handler {
     }
 }
 
+#[derive(Debug)]
 pub struct TrackPlayNotifier {
     pub cfg: EventConfig,
 }
 
 #[async_trait]
 impl VoiceEventHandler for TrackPlayNotifier {
+    #[instrument(name = "track_play_notifier_handler")]
     async fn act(&self, event: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(_track) = event {
-            now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
-                .await
-                .emit();
+            let res =
+                now_playing::send_embed(&self.cfg.ctx, self.cfg.guild_id, self.cfg.text_channel_id)
+                    .await;
+
+            emit!(res, Level::WARN);
         }
 
         None
     }
 }
 
+#[derive(Debug)]
 pub struct TimeoutHandler {
     pub cfg: EventConfig,
     pub timer: AtomicUsize,
@@ -48,11 +54,12 @@ pub struct TimeoutHandler {
 
 #[async_trait]
 impl VoiceEventHandler for TimeoutHandler {
+    #[instrument(name = "timeout_handler")]
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
         let guild = if let Some(i) = self.cfg.ctx.cache.guild(self.cfg.guild_id).await {
             i
         } else {
-            eprintln!("message guild id could not be found");
+            event!(Level::WARN, "message guild id could not be found");
             return None;
         };
         if check_alone(
@@ -63,15 +70,17 @@ impl VoiceEventHandler for TimeoutHandler {
             let prev = self.timer.fetch_add(1, Ordering::Relaxed);
 
             if prev >= 5 {
-                effects::leave(&self.cfg.ctx, self.cfg.guild_id)
-                    .await
-                    .emit();
+                let res = effects::leave(&self.cfg.ctx, self.cfg.guild_id).await;
 
-                self.cfg
+                emit!(res, Level::WARN);
+
+                let res = self
+                    .cfg
                     .text_channel_id
                     .say(&self.cfg.ctx.http, "Left voice due to lack of frens :(((")
-                    .await
-                    .emit();
+                    .await;
+
+                emit!(res, Level::WARN);
             }
         } else {
             self.timer.store(0, Ordering::Relaxed);

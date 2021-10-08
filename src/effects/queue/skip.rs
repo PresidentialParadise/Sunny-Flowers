@@ -1,7 +1,9 @@
 use serenity::{client::Context, model::id::GuildId};
+use tracing::instrument;
 
 use crate::utils::{SunnyError, SunnyResult};
 
+#[instrument(skip(ctx))]
 pub async fn skip(ctx: &Context, guild_id: GuildId) -> SunnyResult<usize> {
     let call_m = songbird::get(ctx)
         .await
