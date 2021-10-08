@@ -46,11 +46,23 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .await
         .ok_or_else(|| SunnyError::log("message guild id could not be found"))?;
 
+    // The user's voice channel id
     let voice_channel_id = guild
         .voice_states
         .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id)
+        .and_then(|vs| vs.channel_id)
         .ok_or_else(|| SunnyError::user("Not in a voice"))?;
+
+    let bot_id = ctx.cache.current_user_id().await;
+    let same_voice = guild
+        .voice_states
+        .get(&bot_id)
+        .and_then(|vs| vs.channel_id)
+        .map_or(false, |id| id == voice_channel_id);
+
+    if same_voice {
+        return Err(SunnyError::user("Already in that voice channel!").into());
+    }
 
     let call_m = effects::join(&EventConfig {
         ctx: ctx.clone(),
@@ -107,7 +119,7 @@ fn validate_url(mut args: Args) -> Option<String> {
 /// While Sunny is in a voice channel, you may run the play command so that she
 /// can start streaming the given video URL.
 pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let url = validate_url(args).ok_or_else(|| SunnyError::user("Wrong url ya dingus"))?;
+    let url = validate_url(args).ok_or_else(|| SunnyError::user("Unable to parse url"))?;
 
     let guild_id = msg
         .guild_id
@@ -136,7 +148,7 @@ pub async fn play(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 /// While Sunny is in a voice channel, you may run the play command so that she
 /// can start streaming the given video URL.
 pub async fn play_next(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let url = validate_url(args).ok_or_else(|| SunnyError::user("Wrong url ya dingus"))?;
+    let url = validate_url(args).ok_or_else(|| SunnyError::user("Unable to parse url"))?;
 
     let guild_id = msg
         .guild_id
